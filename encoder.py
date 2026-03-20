@@ -278,11 +278,15 @@ def encode_query(query: str) -> dict:
         identifiers = clean
         imports = ""
     elif intent["is_import"]:
-        path_tokens = ""
+        path_tokens = clean
         identifiers = clean
         imports = clean
     else:
-        path_tokens = ""
+        # Concept queries: populate ALL roles so both layers participate.
+        # The layer weights (0.30 path + 0.70 content) handle the balance.
+        # Without path_tokens, the path layer produces a random vector and
+        # dual-layer coarse retrieval can't find files by path terms.
+        path_tokens = clean
         identifiers = clean
         imports = clean
 
