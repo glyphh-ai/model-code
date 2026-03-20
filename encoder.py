@@ -816,6 +816,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
             "state": "ASK",
             "candidates": matches[:3],
             "message": "Multiple similar files found. Which did you mean?",
+            "_v": 3,
         })
 
     return _mcp_json({
