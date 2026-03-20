@@ -482,28 +482,12 @@ async def handle_mcp_tool(tool_name: str, arguments: dict, context: dict) -> dic
 
     handler = handlers.get(tool_name)
     if handler is None:
-        return _mcp_text(f"Unknown tool: {tool_name}")
+        return {"state": "ERROR", "error": f"Unknown tool: {tool_name}"}
 
     try:
         return await handler(arguments, context)
     except Exception as e:
-        return _mcp_text(f"Error in {tool_name}: {e}", is_error=True)
-
-
-def _mcp_text(text: str, is_error: bool = False) -> dict:
-    """Build an MCP response with a single text content block."""
-    return {
-        "content": [{"type": "text", "text": text}],
-        "is_error": is_error,
-    }
-
-
-def _mcp_json(data: dict, is_error: bool = False) -> dict:
-    """Build an MCP response with JSON-serialized text content."""
-    return {
-        "content": [{"type": "text", "text": json.dumps(data, default=str)}],
-        "is_error": is_error,
-    }
+        return {"state": "ERROR", "error": f"Error in {tool_name}: {e}"}
 
 
 # ---------------------------------------------------------------------------
@@ -680,20 +664,35 @@ async def _rerank_with_layers(
 # ---------------------------------------------------------------------------
 
 def _format_match(row: dict) -> dict:
-    """Format a search result into a match dict.
+    """Format a search result into a fact_tree child node.
 
     The runtime stores the full record as glyph metadata. When records
     are sent in hierarchical format, the model's metadata dict is nested
     under the 'metadata' key. Handle both flat and nested layouts.
+
+    Returns a FactNode-compatible dict: description, value, data_sample.
     """
     meta = row.get("metadata", {})
     inner = meta.get("metadata", {}) if isinstance(meta.get("metadata"), dict) else {}
+    file_path = inner.get("file_path") or meta.get("file_path") or row["concept_text"]
+    score = round(row["score"], 3)
+    top_tokens = inner.get("top_tokens") or meta.get("top_tokens", [])
+    imports = inner.get("imports") or meta.get("imports", [])
+    extension = inner.get("extension") or meta.get("extension", "")
+
     return {
-        "file": inner.get("file_path") or meta.get("file_path") or row["concept_text"],
-        "confidence": round(row["score"], 3),
-        "top_tokens": inner.get("top_tokens") or meta.get("top_tokens", []),
-        "imports": inner.get("imports") or meta.get("imports", []),
-        "extension": inner.get("extension") or meta.get("extension", ""),
+        "description": file_path,
+        "value": score,
+        "children": [],
+        "citations": [],
+        "data_sample": {
+            "file": file_path,
+            "confidence": score,
+            "top_tokens": top_tokens,
+            "imports": imports,
+            "extension": extension,
+        },
+        "data_context": {},
     }
 
 
@@ -716,7 +715,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
     query = arguments.get("query", "")
     top_k = arguments.get("top_k", 5)
     if not query.strip():
-        return _mcp_text("Query is empty.")
+        return {"state": "ERROR", "error": "Query is empty."}
 
     org_id = context["org_id"]
     model_id = context["model_id"]
@@ -779,10 +778,13 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
         )
 
     if not coarse_results:
-        return _mcp_json({
+        return {
             "state": "ASK",
-            "message": "No files indexed. Run: glyphh-code compile .",
-        })
+            "fact_tree": None,
+            "confidence": 0.0,
+            "match_method": "none",
+            "error": "No files indexed. Run: glyphh-code compile .",
+        }
 
     # Phase 2: re-rank with layer-weighted scoring
     candidate_ids = [r["glyph_id"] for r in coarse_results]
@@ -795,26 +797,45 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
     )
 
     if not ranked:
-        return _mcp_json({
+        return {
             "state": "ASK",
-            "message": "Encoding error during re-ranking.",
-        })
+            "fact_tree": None,
+            "confidence": 0.0,
+            "match_method": "none",
+            "error": "Encoding error during re-ranking.",
+        }
 
-    matches = [_format_match(r) for r in ranked[:top_k]]
-    top_score = matches[0]["confidence"]
-    gap = top_score - matches[1]["confidence"] if len(matches) > 1 else 1.0
+    children = [_format_match(r) for r in ranked[:top_k]]
+    top_score = children[0]["value"]
+    gap = top_score - children[1]["value"] if len(children) > 1 else 1.0
 
     if top_score < 0.10 or gap < 0.02:
-        return _mcp_json({
+        return {
             "state": "ASK",
-            "candidates": matches[:3],
-            "message": "Multiple similar files found. Which did you mean?",
-        })
+            "fact_tree": {
+                "description": "Similarity Computation",
+                "value": None,
+                "children": children[:3],
+                "citations": [],
+                "data_context": {},
+            },
+            "confidence": top_score,
+            "match_method": "code_search",
+            "error": "Multiple similar files found. Which did you mean?",
+        }
 
-    return _mcp_json({
+    return {
         "state": "DONE",
-        "matches": matches,
-    })
+        "fact_tree": {
+            "description": "Similarity Computation",
+            "value": None,
+            "children": children,
+            "citations": [],
+            "data_context": {},
+        },
+        "confidence": top_score,
+        "match_method": "code_search",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -832,7 +853,7 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
     file_path = arguments.get("file_path", "")
     top_k = arguments.get("top_k", 5)
     if not file_path.strip():
-        return _mcp_text("file_path is required.")
+        return {"state": "ERROR", "error": "file_path is required."}
 
     org_id = context["org_id"]
     model_id = context["model_id"]
@@ -853,10 +874,13 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
         glyph_row = result.fetchone()
 
     if glyph_row is None:
-        return _mcp_json({
+        return {
             "state": "ASK",
-            "message": f"File not in index: {file_path}. Run: glyphh-code compile .",
-        })
+            "fact_tree": None,
+            "confidence": 0.0,
+            "match_method": "none",
+            "error": f"File not in index: {file_path}. Run: glyphh-code compile .",
+        }
 
     glyph_id = str(glyph_row.id)
 
@@ -873,10 +897,13 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
         content_row = result.fetchone()
 
     if content_row is None:
-        return _mcp_json({
+        return {
             "state": "ASK",
-            "message": f"No content vector for: {file_path}. Re-compile with hierarchical storage.",
-        })
+            "fact_tree": None,
+            "confidence": 0.0,
+            "match_method": "none",
+            "error": f"No content vector for: {file_path}. Re-compile with hierarchical storage.",
+        }
 
     # Convert pgvector embedding to numpy array
     import numpy as np
@@ -901,17 +928,26 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
         exclude_glyph_id=glyph_id,
     )
 
-    related = [_format_match(r) for r in results[:top_k]]
+    children = [_format_match(r) for r in results[:top_k]]
     source_meta = glyph_row.metadata if isinstance(glyph_row.metadata, dict) else {}
     source_inner = source_meta.get("metadata", {}) if isinstance(source_meta.get("metadata"), dict) else {}
 
-    return _mcp_json({
+    return {
         "state": "DONE",
-        "file": file_path,
-        "top_tokens": source_inner.get("top_tokens") or source_meta.get("top_tokens", []),
-        "imports": source_inner.get("imports") or source_meta.get("imports", []),
-        "related": related,
-    })
+        "fact_tree": {
+            "description": "Related Files",
+            "value": None,
+            "children": children,
+            "citations": [],
+            "data_context": {
+                "source_file": file_path,
+                "top_tokens": source_inner.get("top_tokens") or source_meta.get("top_tokens", []),
+                "imports": source_inner.get("imports") or source_meta.get("imports", []),
+            },
+        },
+        "confidence": children[0]["value"] if children else 0.0,
+        "match_method": "code_related",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -959,10 +995,15 @@ async def _handle_stats(arguments: dict, context: dict) -> dict:
         )
         extensions = {r.ext: r.cnt for r in ext_result.fetchall() if r.ext}
 
-    return _mcp_json({
+    return {
         "state": "DONE",
-        "total_files": total_count,
-        "hierarchical_vectors": vector_count,
-        "extensions": extensions,
-        "model_id": model_id,
-    })
+        "fact_tree": {
+            "description": "Index Statistics",
+            "value": {"total_files": total_count, "hierarchical_vectors": vector_count},
+            "children": [],
+            "citations": [],
+            "data_context": {"extensions": extensions, "model_id": model_id},
+        },
+        "confidence": 1.0,
+        "match_method": "stats",
+    }
