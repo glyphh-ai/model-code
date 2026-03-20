@@ -8,6 +8,87 @@ Same architecture as glyphh-pipedream (3,146 apps) and glyphh-bfcl (#1 on
 BFCL V4). No LLM at build time. No LLM at search time. Pure HDC encoding and
 cosine search.
 
+Built on [**Glyphh Ada 1.1**](https://www.glyphh.ai/products/runtime) · **[Docs →](https://glyphh.ai/docs)** · **[Glyphh Hub →](https://glyphh.ai/hub)**
+
+---
+
+## Getting Started
+
+### 1. Install the Glyphh CLI
+
+```bash
+# Create and activate a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# Install with runtime dependencies (includes FastAPI, SQLAlchemy, pgvector)
+pip install 'glyphh[runtime]'
+```
+
+### 2. Clone and start the model
+
+This model requires PostgreSQL + pgvector for similarity search.
+
+```bash
+git clone https://github.com/glyphh-ai/model-code.git
+cd model-code
+
+# Start the Glyphh shell (prompts login on first run)
+glyphh
+
+# Inside the shell:
+# glyphh> docker init       # generates docker-compose.yml + init.sql
+# glyphh> exit
+
+# Start PostgreSQL + pgvector and the Glyphh runtime
+docker compose up -d --wait
+```
+
+This starts:
+- **PostgreSQL 16 + pgvector** on port 5432 (with HNSW indexing)
+- **Glyphh Runtime** on port 8002
+
+Swagger docs available at `http://localhost:8002/docs` in local mode.
+
+### 3. Deploy the model
+
+```bash
+glyphh
+# glyphh> model deploy .     # deploy code model to runtime
+```
+
+### 4. Compile your codebase
+
+```bash
+# Full compile (all indexable files)
+python compile.py /path/to/your/repo --runtime-url http://localhost:8002
+
+# Incremental (changed files since last commit)
+python compile.py /path/to/your/repo --incremental
+
+# Dry run (show what would be indexed)
+python compile.py /path/to/your/repo --dry-run
+```
+
+### 5. Connect Claude Code
+
+Add to Claude Code MCP config (`~/.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "glyphh": {
+      "url": "http://localhost:8002/{org_id}/code/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+MCP tools are automatically available via the runtime's MCP server:
+`GET /{org_id}/code/mcp/tools` → `glyphh_search`, `glyphh_related`, `glyphh_stats`
+
+---
 
 ## What it does
 
@@ -26,34 +107,6 @@ Claude reads one file and acts.
 The index stores not just the vector but the token vocabulary of every file.
 Search results return enough context that Claude often does not need to read
 the file at all. When it does read, it already knows exactly what to look for.
-
-
-## Quick start
-
-```bash
-# Deploy the code model to your runtime
-glyphh model deploy glyphh-models/code/
-
-# Compile your repo
-cd your-project
-python ../glyphh-models/code/compile.py . --runtime-url http://localhost:8002
-
-# MCP tools are automatically available via the runtime's MCP server
-# GET /{org_id}/code/mcp/tools → glyphh_search, glyphh_related, glyphh_stats
-```
-
-Add to Claude Code MCP config (`~/.claude/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "glyphh": {
-      "url": "http://localhost:8002/{org_id}/code/mcp",
-      "transport": "http"
-    }
-  }
-}
-```
 
 
 ## Architecture
