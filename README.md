@@ -295,6 +295,45 @@ The first matching rule wins — Glyphh tools run silently while everything else
 still prompts.
 
 
+## Enforce glyphh_search over Grep/Glob
+
+Claude Code defaults to using Grep and Glob for file search — bypassing the
+Glyphh index entirely. The included CLAUDE.md rules tell Claude to use
+`glyphh_search` first, but Claude doesn't always follow them.
+
+A Claude Code **PreToolUse hook** can enforce this by blocking Grep and Glob
+calls with a message redirecting Claude to `glyphh_search`.
+
+Add this to `.claude/settings.json` in your project:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/model-code/hooks/enforce-glyphh-search.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replace `/path/to/model-code` with wherever you cloned this repo.
+
+When Claude tries to call Grep or Glob, the hook blocks the call and tells
+Claude to use `glyphh_search` instead. Claude will then retry with the
+Glyphh index.
+
+To temporarily disable the hook, remove or comment out the `PreToolUse`
+entry in settings.json.
+
+
 ## Tests
 
 ```bash

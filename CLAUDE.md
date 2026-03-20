@@ -16,8 +16,12 @@ glyphh_stats    index statistics
 
 ALWAYS call glyphh_search before reading any file.
 ALWAYS call glyphh_related before editing a file.
+NEVER use Grep to find files. Use glyphh_search instead.
+NEVER use Glob to find files. Use glyphh_search instead.
+NEVER use the Agent tool to explore the codebase. Use glyphh_search instead.
 NEVER scan directories to find relevant code.
 NEVER read multiple files speculatively.
+Only fall back to Grep or Glob if glyphh_search returns no results above 0.50.
 
 Search results include top_tokens and imports for each file.
 Use top_tokens to understand what the file is about.
