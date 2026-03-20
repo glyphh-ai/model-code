@@ -39,7 +39,7 @@ fi
 INPUT="$(cat)"
 
 # Only trigger on Bash commands that contain "git commit"
-COMMAND="$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)"
+COMMAND="$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null || true)"
 
 if [[ "$COMMAND" != *"git commit"* ]]; then
     exit 0
@@ -70,5 +70,8 @@ if [ -n "${GLYPHH_ORG_ID:-}" ]; then
     ARGS+=("--org-id" "$GLYPHH_ORG_ID")
 fi
 
+# Use anaconda python (has requests) — system python3 may not
+PYTHON="${GLYPHH_PYTHON:-/opt/homebrew/anaconda3/bin/python}"
+
 # Run in background — don't block Claude
-python3 "$COMPILE" "${ARGS[@]}" &>/dev/null &
+"$PYTHON" "$COMPILE" "${ARGS[@]}" >> /tmp/glyphh-compile.log 2>&1 &
