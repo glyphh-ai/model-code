@@ -469,10 +469,10 @@ async def _pgvector_search(
         result = await session.execute(
             text(
                 f"SELECT concept_text, metadata, "
-                f"1 - (embedding <=> :vec::vector) AS score "
+                f"1 - (embedding <=> CAST(:vec AS vector)) AS score "
                 f"FROM glyphs "
                 f"WHERE {where} "
-                f"ORDER BY embedding <=> :vec::vector "
+                f"ORDER BY embedding <=> CAST(:vec AS vector) "
                 f"LIMIT :top_k"
             ),
             params,
