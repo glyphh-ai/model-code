@@ -24,7 +24,6 @@
 #   }
 #
 # Configuration (environment variables):
-#   GLYPHH_COMPILE_PATH  Path to compile.py (required)
 #   GLYPHH_RUNTIME_URL   Runtime endpoint (default: http://localhost:8002)
 #   GLYPHH_TOKEN         Auth token (auto-resolved from CLI session if unset)
 #   GLYPHH_ORG_ID        Org ID (auto-resolved from CLI session if unset)
@@ -46,18 +45,13 @@ if [[ "$COMMAND" != *"git commit"* ]]; then
     exit 0
 fi
 
-# Find the repo root
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-if [ -z "$REPO_ROOT" ]; then
-    exit 0
-fi
+# The hook always targets glyphh-master as the indexed repo,
+# regardless of which subdirectory the commit happened in.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPILE="$SCRIPT_DIR/../compile.py"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# Locate compile.py
-if [ -n "${GLYPHH_COMPILE_PATH:-}" ]; then
-    COMPILE="$GLYPHH_COMPILE_PATH"
-elif [ -f "$REPO_ROOT/compile.py" ]; then
-    COMPILE="$REPO_ROOT/compile.py"
-else
+if [ ! -f "$COMPILE" ]; then
     exit 0
 fi
 
