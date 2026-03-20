@@ -552,14 +552,21 @@ async def _pgvector_search(
 
 
 def _format_match(row: dict) -> dict:
-    """Format a pgvector result row into a search match."""
+    """Format a pgvector result row into a search match.
+
+    The runtime stores the full record as glyph metadata. When records
+    are sent in hierarchical format, the model's metadata dict is nested
+    under the 'metadata' key. Handle both flat and nested layouts.
+    """
     meta = row.get("metadata", {})
+    # The model's metadata may be nested under 'metadata' key
+    inner = meta.get("metadata", {}) if isinstance(meta.get("metadata"), dict) else {}
     return {
-        "file": meta.get("file_path", row["concept_text"]),
+        "file": inner.get("file_path") or meta.get("file_path") or row["concept_text"],
         "confidence": round(row["score"], 3),
-        "top_tokens": meta.get("top_tokens", []),
-        "imports": meta.get("imports", []),
-        "extension": meta.get("extension", ""),
+        "top_tokens": inner.get("top_tokens") or meta.get("top_tokens", []),
+        "imports": inner.get("imports") or meta.get("imports", []),
+        "extension": inner.get("extension") or meta.get("extension", ""),
     }
 
 
@@ -628,13 +635,16 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
     org_id = context["org_id"]
     model_id = context["model_id"]
 
-    # Get the file's stored vector
+    # Get the file's stored vector.
+    # concept_text may be a mangled key_part value (tokenized path with
+    # underscores) so also search metadata->>'file_path' for the real path.
     async with context["session_factory"]() as session:
         result = await session.execute(
             sql_text(
-                "SELECT embedding, metadata FROM glyphs "
+                "SELECT concept_text, embedding, metadata FROM glyphs "
                 "WHERE org_id = :org_id AND model_id = :model_id "
-                "AND concept_text = :file_path "
+                "AND (concept_text = :file_path "
+                "     OR metadata->'metadata'->>'file_path' = :file_path) "
                 "LIMIT 1"
             ),
             {"org_id": org_id, "model_id": model_id, "file_path": file_path},
@@ -648,23 +658,25 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
         })
 
     # Search for similar files, excluding the source file
+    stored_key = row.concept_text
     rows = await _pgvector_search(
         context["session_factory"],
         org_id,
         model_id,
         row.embedding,
         top_k=top_k + 1,
-        exclude_key=file_path,
+        exclude_key=stored_key,
     )
 
     related = [_format_match(r) for r in rows[:top_k]]
     source_meta = row.metadata if isinstance(row.metadata, dict) else {}
+    source_inner = source_meta.get("metadata", {}) if isinstance(source_meta.get("metadata"), dict) else {}
 
     return _mcp_json({
         "state": "DONE",
         "file": file_path,
-        "top_tokens": source_meta.get("top_tokens", []),
-        "imports": source_meta.get("imports", []),
+        "top_tokens": source_inner.get("top_tokens") or source_meta.get("top_tokens", []),
+        "imports": source_inner.get("imports") or source_meta.get("imports", []),
         "related": related,
     })
 
