@@ -878,12 +878,24 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
             "message": f"No content vector for: {file_path}. Re-compile with hierarchical storage.",
         })
 
+    # Convert pgvector embedding to numpy array
+    import numpy as np
+    embedding = content_row.embedding
+    if isinstance(embedding, np.ndarray):
+        content_vec = embedding.astype(np.int8)
+    elif isinstance(embedding, (list, tuple)):
+        content_vec = np.array(embedding, dtype=np.int8)
+    elif hasattr(embedding, "to_list"):
+        content_vec = np.array(embedding.to_list(), dtype=np.int8)
+    else:
+        content_vec = np.array(json.loads(str(embedding)), dtype=np.int8)
+
     # Search for similar files by content layer
     results = await _layer_search(
         context["session_factory"],
         org_id,
         model_id,
-        content_row.embedding,
+        content_vec,
         "content",
         top_k=top_k + 1,
         exclude_glyph_id=glyph_id,
