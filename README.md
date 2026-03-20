@@ -75,7 +75,7 @@ python compile.py /path/to/your/repo --dry-run
 Add the MCP server using the Claude Code CLI:
 
 ```bash
-claude mcp add --transport http glyphh-code http://localhost:8002/{org_id}/code/mcp
+claude mcp add --transport http glyphh http://localhost:8002/{org_id}/code/mcp
 ```
 
 To find your org ID, run `glyphh auth status` in the Glyphh shell:
@@ -89,7 +89,7 @@ glyphh
 In local mode the org ID is `local-dev-org`:
 
 ```bash
-claude mcp add --transport http glyphh-code http://localhost:8002/local-dev-org/code/mcp
+claude mcp add --transport http glyphh http://localhost:8002/local-dev-org/code/mcp
 ```
 
 Restart Claude Code to pick up the MCP config. In VS Code: `Cmd+Shift+P` →
@@ -270,10 +270,10 @@ project:
 {
   "permissions": {
     "allow": [
-      "mcp__glyphh-code__glyphh_search",
-      "mcp__glyphh-code__glyphh_related",
-      "mcp__glyphh-code__glyphh_drift",
-      "mcp__glyphh-code__glyphh_risk"
+      "mcp__glyphh__glyphh_search",
+      "mcp__glyphh__glyphh_related",
+      "mcp__glyphh__glyphh_drift",
+      "mcp__glyphh__glyphh_risk"
     ]
   }
 }
@@ -285,7 +285,7 @@ Or use a wildcard to allow all tools from the Glyphh server:
 {
   "permissions": {
     "allow": [
-      "mcp__glyphh-code__*"
+      "mcp__glyphh__*"
     ]
   }
 }
