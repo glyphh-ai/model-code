@@ -1,9 +1,9 @@
 model_id: code
 name: Glyphh Code
 description: >-
-  File-level codebase intelligence for Claude Code. Encodes every source file
-  as an HDC vector — path segments, identifiers, and imports. NL queries find
-  files by meaning, not grep. No LLM at build time or search time.
+  File-level codebase intelligence. Encodes source files as HDC vectors
+  using path, identifier, and import signals. NL queries find files by
+  meaning, not grep. No LLM at build or search time.
 version: 0.1.0
 author: Glyphh AI
 license: MIT
