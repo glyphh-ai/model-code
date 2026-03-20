@@ -99,6 +99,25 @@ In local mode the org ID is `local-dev-org`.
 MCP tools are automatically available via the runtime's MCP server:
 `GET /{org_id}/code/mcp/tools` → `glyphh_search`, `glyphh_related`, `glyphh_stats`
 
+Restart Claude Code to pick up the MCP config. In VS Code: `Cmd+Shift+P` →
+"Claude Code: Restart". In the CLI: exit and re-enter the session.
+
+### 6. Add CLAUDE.md (recommended)
+
+Copy the included `CLAUDE.md` into your project root:
+
+```bash
+cp CLAUDE.md /path/to/your/project/CLAUDE.md
+```
+
+Claude Code loads this file automatically at the start of every conversation.
+It teaches Claude Code to always search the Glyphh index before reading files,
+check blast radius before editing, and use `top_tokens` and `imports` from
+search results to avoid unnecessary file reads.
+
+Without it, Claude Code will still have the MCP tools available but will fall
+back to its default file scanning behavior.
+
 ---
 
 ## What it does
