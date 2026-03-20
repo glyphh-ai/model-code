@@ -804,7 +804,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
     top_score = matches[0]["confidence"]
     gap = top_score - matches[1]["confidence"] if len(matches) > 1 else 1.0
 
-    if top_score < 0.45 or gap < 0.03:
+    if top_score < 0.10 or gap < 0.02:
         return _mcp_json({
             "state": "ASK",
             "candidates": matches[:3],

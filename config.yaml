@@ -8,6 +8,6 @@ encoder:
   seed: 42
 
 similarity:
-  threshold: 0.45
+  threshold: 0.10
   top_k: 5
   store_hierarchical_vectors: true
