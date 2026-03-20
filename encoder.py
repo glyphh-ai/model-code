@@ -588,6 +588,7 @@ async def _rerank_with_layers(
     For each candidate, loads its per-layer vectors from glyph_vectors
     and computes weighted similarity: 0.30 * path_sim + 0.70 * content_sim.
     """
+    import numpy as np
     from glyphh.core.ops import cosine_similarity
     from sqlalchemy import text
 
@@ -631,7 +632,11 @@ async def _rerank_with_layers(
                 "metadata": meta,
                 "layers": {},
             }
-        candidates[gid]["layers"][row.path] = row.embedding
+        # Convert pgvector type to numpy array for cosine_similarity
+        embedding = row.embedding
+        if not isinstance(embedding, np.ndarray):
+            embedding = np.asarray(embedding, dtype=np.int8)
+        candidates[gid]["layers"][row.path] = embedding
 
     # Score each candidate with layer-weighted similarity
     scored = []
