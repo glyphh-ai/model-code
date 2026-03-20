@@ -73,5 +73,8 @@ fi
 # Use anaconda python (has requests) — system python3 may not
 PYTHON="${GLYPHH_PYTHON:-/opt/homebrew/anaconda3/bin/python}"
 
+# glyphh SDK lives in glyphh-runtime
+export PYTHONPATH="$REPO_ROOT/glyphh-runtime${PYTHONPATH:+:$PYTHONPATH}"
+
 # Run in background — don't block Claude
 "$PYTHON" "$COMPILE" "${ARGS[@]}" >> /tmp/glyphh-compile.log 2>&1 &
