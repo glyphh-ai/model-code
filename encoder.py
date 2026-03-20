@@ -733,33 +733,53 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
     concept = Concept(name=name, attributes=attrs)
     query_glyph = encoder.encode(concept)
 
-    # Determine which layer to search based on query intent
+    # Determine query intent for logging / future use
     tokens = _tokenize(query)
     words = [w for w in tokens.split() if w not in _STOP_WORDS and len(w) > 1]
     intent = _analyze_query(query, words)
 
-    if intent["is_structural"] and hasattr(query_glyph, "layers") and "path" in query_glyph.layers:
-        primary_layer = "path"
-        primary_cortex = query_glyph.layers["path"].cortex
-    else:
-        primary_layer = "content"
-        primary_cortex = (
-            query_glyph.layers["content"].cortex
-            if hasattr(query_glyph, "layers") and "content" in query_glyph.layers
-            else query_glyph.global_cortex
-        )
-
-    # Phase 1: coarse retrieval from the primary layer
-    # Fetch extra candidates for re-ranking
+    # Phase 1: coarse retrieval from BOTH layers, merge candidates
+    # Queries often mix path terms ("studio hub") and content terms ("model"),
+    # so searching only one layer misses files that match the other.
     coarse_k = max(top_k * 4, 20)
-    coarse_results = await _layer_search(
-        context["session_factory"],
-        org_id,
-        model_id,
-        primary_cortex.data,
-        primary_layer,
-        top_k=coarse_k,
-    )
+    seen_glyph_ids: set[str] = set()
+    coarse_results: list[dict] = []
+
+    has_layers = hasattr(query_glyph, "layers")
+
+    # Search content layer
+    if has_layers and "content" in query_glyph.layers:
+        content_results = await _layer_search(
+            context["session_factory"], org_id, model_id,
+            query_glyph.layers["content"].cortex.data,
+            "content", top_k=coarse_k,
+        )
+        for r in content_results:
+            gid = r["glyph_id"]
+            if gid not in seen_glyph_ids:
+                seen_glyph_ids.add(gid)
+                coarse_results.append(r)
+
+    # Search path layer
+    if has_layers and "path" in query_glyph.layers:
+        path_results = await _layer_search(
+            context["session_factory"], org_id, model_id,
+            query_glyph.layers["path"].cortex.data,
+            "path", top_k=coarse_k,
+        )
+        for r in path_results:
+            gid = r["glyph_id"]
+            if gid not in seen_glyph_ids:
+                seen_glyph_ids.add(gid)
+                coarse_results.append(r)
+
+    # Fallback: search global cortex if no layer results
+    if not coarse_results and has_layers:
+        coarse_results = await _layer_search(
+            context["session_factory"], org_id, model_id,
+            query_glyph.global_cortex.data,
+            "content", top_k=coarse_k,
+        )
 
     if not coarse_results:
         return _mcp_json({
