@@ -66,9 +66,18 @@ python compile.py /path/to/your/repo --runtime-url http://localhost:8002
 # Incremental (changed files since last commit)
 python compile.py /path/to/your/repo --incremental
 
+# Incremental from a child repo / submodule commit
+python compile.py /path/to/your/repo --incremental --diff-repo /path/to/child/repo
+
 # Dry run (show what would be indexed)
 python compile.py /path/to/your/repo --dry-run
 ```
+
+The `--diff-repo` flag tells compile.py to run `git diff HEAD^ HEAD` in a
+different repo than the source directory. Changed file paths are resolved
+relative to the child repo but the source directory is still used as the
+compile root. This is how the post-commit hook handles commits in monorepo
+subdirectories, child repos, and submodules.
 
 ### 5. Connect Claude Code
 
@@ -220,6 +229,9 @@ python compile.py . --incremental
 
 # Recompile files changed in a specific commit
 python compile.py . --diff abc123
+
+# Recompile when commit was in a child repo / submodule
+python compile.py /path/to/monorepo --incremental --diff-repo /path/to/monorepo/child-repo
 ```
 
 The index is updated automatically after every commit via the Claude Code
@@ -284,7 +296,18 @@ Two hooks are included to integrate Glyphh with Claude Code:
 2. **post-commit-compile.sh** (PostToolUse) — runs `compile.py --incremental`
    after every `git commit` to keep the index up to date
 
-Add both to `.claude/settings.json` in your project:
+### post-commit-compile.sh
+
+The post-commit hook takes a **source directory** as its first argument. This
+is the root of the codebase you want indexed. The hook fires on any `git
+commit` that happens inside that directory — whether the commit is in the
+source directory itself, a child repo, or a submodule.
+
+When a commit lands in a child repo, the hook passes `--diff-repo` to
+`compile.py` so it diffs the correct repo while still compiling against the
+source directory root.
+
+Add both hooks to `.claude/settings.json` in your project:
 
 ```json
 {
@@ -306,7 +329,7 @@ Add both to `.claude/settings.json` in your project:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/model-code/hooks/post-commit-compile.sh"
+            "command": "/path/to/model-code/hooks/post-commit-compile.sh /path/to/source/dir"
           }
         ]
       }
@@ -315,15 +338,18 @@ Add both to `.claude/settings.json` in your project:
 }
 ```
 
-Replace `/path/to/model-code` with wherever you cloned this repo.
+Replace `/path/to/model-code` with wherever you cloned this repo and
+`/path/to/source/dir` with the root of the codebase to index.
 
-Set `GLYPHH_COMPILE_PATH` if `compile.py` isn't in the repo root:
+### Environment variables
 
-```bash
-export GLYPHH_COMPILE_PATH=/path/to/model-code/compile.py
-```
-
-Disable either hook temporarily with `GLYPHH_HOOK_DISABLE=1`.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GLYPHH_RUNTIME_URL` | `http://localhost:8002` | Runtime endpoint |
+| `GLYPHH_TOKEN` | Auto-resolved from CLI session | Auth token |
+| `GLYPHH_ORG_ID` | Auto-resolved from CLI session | Org ID |
+| `GLYPHH_PYTHON` | `/opt/homebrew/anaconda3/bin/python` | Python interpreter (must have `requests`) |
+| `GLYPHH_HOOK_DISABLE` | — | Set to `1` to temporarily disable the hook |
 
 
 ## Tests
