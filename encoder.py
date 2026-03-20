@@ -373,18 +373,11 @@ def file_to_record(file_path: str, repo_root: str = ".") -> dict | None:
     identifiers = _extract_identifiers(content)
     top_tokens = _top_tokens(identifiers)
 
-    # Use top_tokens for encoding instead of full identifiers.
-    # Full identifiers can have 200+ tokens which dilutes each token's
-    # contribution to ~1/sqrt(N) in the HDC vector. Top 20 tokens keep
-    # the density comparable to query vectors (3-5 tokens), making
-    # cosine similarity discriminative.
-    top_tokens_str = " ".join(top_tokens)
-
     return {
         "concept_text": rel_path,
         "attributes": {
             "path_tokens": path_tokens,
-            "identifiers": top_tokens_str,
+            "identifiers": identifiers,
             "imports": imports,
         },
         "metadata": {
@@ -816,7 +809,6 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
             "state": "ASK",
             "candidates": matches[:3],
             "message": "Multiple similar files found. Which did you mean?",
-            "_v": 3,
         })
 
     return _mcp_json({
