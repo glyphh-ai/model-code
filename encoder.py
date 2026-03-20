@@ -632,11 +632,20 @@ async def _rerank_with_layers(
                 "metadata": meta,
                 "layers": {},
             }
-        # Convert pgvector type to numpy array for cosine_similarity
+        # Convert pgvector type to numpy array for cosine_similarity.
+        # pgvector returns various types depending on driver: numpy array,
+        # list of floats, or a pgvector Vector object with list-like access.
         embedding = row.embedding
-        if not isinstance(embedding, np.ndarray):
-            embedding = np.asarray(embedding, dtype=np.int8)
-        candidates[gid]["layers"][row.path] = embedding
+        if isinstance(embedding, np.ndarray):
+            arr = embedding.astype(np.int8)
+        elif isinstance(embedding, (list, tuple)):
+            arr = np.array(embedding, dtype=np.int8)
+        elif hasattr(embedding, "to_list"):
+            arr = np.array(embedding.to_list(), dtype=np.int8)
+        else:
+            # pgvector string: "[1,-1,1,...]" — parse manually
+            arr = np.array(json.loads(str(embedding)), dtype=np.int8)
+        candidates[gid]["layers"][row.path] = arr
 
     # Score each candidate with layer-weighted similarity
     scored = []
