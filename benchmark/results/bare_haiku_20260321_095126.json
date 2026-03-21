@@ -1,0 +1,51 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "mode": "bare",
+  "results": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.5: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_01JdV6AY3vHJexit7Cg9V3Ue. Each `tool_use` block must have a corresponding `tool_result` block in the next message.'}, 'request_id': 'req_011CZGQwS6Qa2eLrbqWoFVzD'}"
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.3: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_012Vjys86LW26MMqUckjNFeX, toolu_018551cBqV9n3q7tiLj76jJ3. Each `tool_use` block must have a corresponding `tool_result` block in the next message.'}, 'request_id': 'req_011CZGQwYXrf7ns4fjviQoxg'}"
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.3: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_016jQ56rgnMDN6YFS4tPxMQJ, toolu_019omnseK2E59PBVYqacDgEk. Each `tool_use` block must have a corresponding `tool_result` block in the next message.'}, 'request_id': 'req_011CZGQwfjh8hzGfWh5bcLp9'}"
+    }
+  ]
+}

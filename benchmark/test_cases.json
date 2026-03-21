@@ -1,0 +1,198 @@
+{
+  "description": "Code search benchmark for fastmcp codebase (~760 files). Tests Claude's ability to find the right file and act on it with and without Glyphh.",
+  "runtime_url": "https://runtime.glyphh.ai",
+  "org_id": "a9f94516-3cb1-4218-a3f5-8aaed04e64f3",
+  "model_id": "code",
+  "test_cases": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "expected_in_top_k": 3,
+      "description": "Find a specific middleware by concept"
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "expected_in_top_k": 3,
+      "description": "Find SSE transport implementation"
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "expected_in_top_k": 3,
+      "description": "Find middleware that injects tools"
+    },
+    {
+      "id": "search_04",
+      "type": "search",
+      "query": "function argument parsing and validation",
+      "expected_file": "src/fastmcp/tools/function_parsing.py",
+      "expected_in_top_k": 3,
+      "description": "Find function argument parser"
+    },
+    {
+      "id": "search_05",
+      "type": "search",
+      "query": "rate limiting middleware",
+      "expected_file": "src/fastmcp/server/middleware/rate_limiting.py",
+      "expected_in_top_k": 3,
+      "description": "Find rate limiter"
+    },
+    {
+      "id": "search_06",
+      "type": "search",
+      "query": "resource template URI matching",
+      "expected_file": "src/fastmcp/resources/template.py",
+      "expected_in_top_k": 3,
+      "description": "Find resource template matching logic"
+    },
+    {
+      "id": "search_07",
+      "type": "search",
+      "query": "error handling middleware for MCP protocol errors",
+      "expected_file": "src/fastmcp/server/middleware/error_handling.py",
+      "expected_in_top_k": 3,
+      "description": "Find error handling middleware"
+    },
+    {
+      "id": "search_08",
+      "type": "search",
+      "query": "OpenAPI schema to MCP tool conversion",
+      "expected_file": "src/fastmcp/experimental/server/openapi/__init__.py",
+      "expected_in_top_k": 5,
+      "description": "Find OpenAPI integration"
+    },
+    {
+      "id": "search_09",
+      "type": "search",
+      "query": "caching middleware for MCP responses",
+      "expected_file": "src/fastmcp/server/middleware/caching.py",
+      "expected_in_top_k": 3,
+      "description": "Find response caching"
+    },
+    {
+      "id": "search_10",
+      "type": "search",
+      "query": "telemetry and logging instrumentation",
+      "expected_file": "src/fastmcp/telemetry.py",
+      "expected_in_top_k": 3,
+      "description": "Find telemetry module"
+    },
+    {
+      "id": "search_11",
+      "type": "search",
+      "query": "PKCE OAuth flow verifier",
+      "expected_file": "tests/server/auth/oauth_proxy/test_authorization.py",
+      "expected_in_top_k": 5,
+      "description": "Find PKCE OAuth test"
+    },
+    {
+      "id": "search_12",
+      "type": "search",
+      "query": "function tool decorator and registration",
+      "expected_file": "src/fastmcp/tools/function_tool.py",
+      "expected_in_top_k": 3,
+      "description": "Find tool registration"
+    },
+    {
+      "id": "search_13",
+      "type": "search",
+      "query": "dereference middleware for resolving references",
+      "expected_file": "src/fastmcp/server/middleware/dereference.py",
+      "expected_in_top_k": 3,
+      "description": "Find dereference middleware"
+    },
+    {
+      "id": "search_14",
+      "type": "search",
+      "query": "server timing measurement middleware",
+      "expected_file": "src/fastmcp/server/middleware/timing.py",
+      "expected_in_top_k": 3,
+      "description": "Find timing middleware"
+    },
+    {
+      "id": "search_15",
+      "type": "search",
+      "query": "function resource that returns dynamic content",
+      "expected_file": "src/fastmcp/resources/function_resource.py",
+      "expected_in_top_k": 3,
+      "description": "Find function-based resource"
+    },
+    {
+      "id": "edit_01",
+      "type": "edit",
+      "query": "Add a max_retries parameter to the rate limiting middleware",
+      "target_file": "src/fastmcp/server/middleware/rate_limiting.py",
+      "description": "Edit task: modify rate limiter"
+    },
+    {
+      "id": "edit_02",
+      "type": "edit",
+      "query": "Add request logging to the authorization middleware",
+      "target_file": "src/fastmcp/server/middleware/authorization.py",
+      "description": "Edit task: add logging to auth"
+    },
+    {
+      "id": "edit_03",
+      "type": "edit",
+      "query": "Fix the SSE connection handler to support keep-alive pings",
+      "target_file": "src/fastmcp/client/transports/sse.py",
+      "description": "Edit task: fix SSE handler"
+    },
+    {
+      "id": "edit_04",
+      "type": "edit",
+      "query": "Add a timeout parameter to the caching middleware",
+      "target_file": "src/fastmcp/server/middleware/caching.py",
+      "description": "Edit task: modify cache timeout"
+    },
+    {
+      "id": "edit_05",
+      "type": "edit",
+      "query": "Update the telemetry module to support OpenTelemetry spans",
+      "target_file": "src/fastmcp/telemetry.py",
+      "description": "Edit task: enhance telemetry"
+    },
+    {
+      "id": "debug_01",
+      "type": "debug",
+      "query": "TypeError in tool_transform.py when transforming async functions",
+      "target_file": "src/fastmcp/tools/tool_transform.py",
+      "description": "Debug task: find error source in tool transform"
+    },
+    {
+      "id": "debug_02",
+      "type": "debug",
+      "query": "Connection refused error in the HTTP SSE transport",
+      "target_file": "src/fastmcp/client/transports/sse.py",
+      "description": "Debug task: find connection error source"
+    },
+    {
+      "id": "debug_03",
+      "type": "debug",
+      "query": "Authentication token not being passed through middleware chain",
+      "target_file": "src/fastmcp/server/middleware/authorization.py",
+      "description": "Debug task: trace auth token flow"
+    },
+    {
+      "id": "understand_01",
+      "type": "understand",
+      "query": "How does the middleware chain work in FastMCP?",
+      "target_file": "src/fastmcp/server/middleware/middleware.py",
+      "description": "Understand: middleware architecture"
+    },
+    {
+      "id": "understand_02",
+      "type": "understand",
+      "query": "How are tools registered and dispatched?",
+      "target_file": "src/fastmcp/tools/base.py",
+      "description": "Understand: tool dispatch system"
+    }
+  ]
+}

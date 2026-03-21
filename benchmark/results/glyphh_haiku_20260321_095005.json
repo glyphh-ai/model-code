@@ -1,0 +1,73 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "mode": "glyphh",
+  "results": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "found": true,
+      "rank": 3,
+      "tool_calls": 1,
+      "input_tokens": 2441,
+      "output_tokens": 263,
+      "total_tokens": 2704,
+      "cost_usd": 0.003005,
+      "latency_ms": 4120.1,
+      "files_returned": [
+        "src/fastmcp/server/middleware/__init__.py",
+        "tests/server/auth/oauth_proxy/test_authorization.py",
+        "src/fastmcp/server/middleware/authorization.py"
+      ],
+      "response": "Found it! The OAuth authorization middleware is located in:\n\n**`src/fastmcp/server/middleware/authorization.py`** (confidence: 0.162)\n\nThis file contains the authorization middleware with key concepts"
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 5,
+      "input_tokens": 10664,
+      "output_tokens": 379,
+      "total_tokens": 11043,
+      "cost_usd": 0.010047,
+      "latency_ms": 7290.7,
+      "files_returned": [
+        "tests/server/test_app_state.py",
+        "tests/client/client/test_transport.py",
+        "src/fastmcp/server/mixins/__init__.py",
+        "tests/server/test_app_state.py",
+        "tests/client/client/test_transport.py",
+        "tests/utilities/test_tests.py",
+        "src/fastmcp/server/mixins/__init__.py",
+        "src/fastmcp/client/mixins/__init__.py",
+        "tests/client/client/test_transport.py",
+        "src/fastmcp/server/mixins/__init__.py"
+      ],
+      "response": "Perfect! I found it. Let me also search for the actual transport handler file:"
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "found": true,
+      "rank": 1,
+      "tool_calls": 1,
+      "input_tokens": 2393,
+      "output_tokens": 332,
+      "total_tokens": 2725,
+      "cost_usd": 0.003242,
+      "latency_ms": 4304.6,
+      "files_returned": [
+        "src/fastmcp/server/middleware/tool_injection.py",
+        "tests/deprecated/test_tool_injection_middleware.py",
+        "tests/server/middleware/test_tool_injection.py"
+      ],
+      "response": "Based on the search results, I found the **tool injection middleware** in your codebase:\n\n## Primary File\n**`src/fastmcp/server/middleware/tool_injection.py`** (confidence: 0.266)\n\n### Key Concepts:\n-"
+    }
+  ]
+}

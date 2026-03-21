@@ -1,0 +1,120 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "mode": "glyphh",
+  "results": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "found": true,
+      "rank": 3,
+      "tool_calls": 1,
+      "input_tokens": 2427,
+      "output_tokens": 342,
+      "total_tokens": 2769,
+      "cost_usd": 0.00331,
+      "latency_ms": 5247.7,
+      "files_returned": [
+        "src/fastmcp/server/middleware/__init__.py",
+        "tests/server/auth/oauth_proxy/test_authorization.py",
+        "src/fastmcp/server/middleware/authorization.py"
+      ],
+      "response": "I found the OAuth authorization middleware! Here are the relevant files:\n\n## Primary Result:\n\n**`src/fastmcp/server/middleware/authorization.py`** (confidence: 0.162)\n- This is the OAuth authorization"
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "found": true,
+      "rank": 11,
+      "tool_calls": 8,
+      "input_tokens": 14520,
+      "output_tokens": 496,
+      "total_tokens": 15016,
+      "cost_usd": 0.0136,
+      "latency_ms": 7968.4,
+      "files_returned": [
+        "tests/server/test_app_state.py",
+        "tests/client/client/test_transport.py",
+        "src/fastmcp/server/mixins/__init__.py",
+        "tests/server/test_app_state.py",
+        "src/fastmcp/server/mixins/__init__.py",
+        "tests/client/client/test_transport.py",
+        "examples/sampling/tool_use.py",
+        "tests/client/sampling/handlers/test_anthropic_handler.py",
+        "src/fastmcp/experimental/sampling/handlers/openai.py",
+        "src/fastmcp/server/mixins/__init__.py"
+      ],
+      "response": "Let me search more specifically:"
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "found": true,
+      "rank": 1,
+      "tool_calls": 1,
+      "input_tokens": 2393,
+      "output_tokens": 328,
+      "total_tokens": 2721,
+      "cost_usd": 0.003226,
+      "latency_ms": 4201.0,
+      "files_returned": [
+        "src/fastmcp/server/middleware/tool_injection.py",
+        "tests/deprecated/test_tool_injection_middleware.py",
+        "tests/server/middleware/test_tool_injection.py"
+      ],
+      "response": "Based on the search results, I found the **tool injection middleware** implementation:\n\n## Primary File\n**`src/fastmcp/server/middleware/tool_injection.py`** (confidence: 0.266)\n\nThis is the main impl"
+    },
+    {
+      "id": "search_04",
+      "type": "search",
+      "query": "function argument parsing and validation",
+      "expected_file": "src/fastmcp/tools/function_parsing.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 7,
+      "input_tokens": 13762,
+      "output_tokens": 882,
+      "total_tokens": 14644,
+      "cost_usd": 0.014538,
+      "latency_ms": 10338.6,
+      "files_returned": [
+        "tests/server/test_input_validation.py",
+        "tests/resources/test_resource_template_query_params.py",
+        "tests/server/providers/local_provider_tools/test_parameters.py",
+        "src/fastmcp/client/auth/__init__.py",
+        "src/fastmcp/utilities/version_check.py",
+        "tests/cli/test_shared.py",
+        "docs/css/python-sdk.css",
+        "examples/get_file.py",
+        "v3-notes/task-meta-parameter.md",
+        "tests/utilities/openapi/test_parser.py"
+      ],
+      "response": "Based on the search results, here are the key files related to **function argument parsing and validation** in the codebase:\n\n## Main Files Found:\n\n1. **`tests/server/test_input_validation.py`** (conf"
+    },
+    {
+      "id": "search_05",
+      "type": "search",
+      "query": "rate limiting middleware",
+      "expected_file": "src/fastmcp/server/middleware/rate_limiting.py",
+      "found": true,
+      "rank": 1,
+      "tool_calls": 1,
+      "input_tokens": 2290,
+      "output_tokens": 382,
+      "total_tokens": 2672,
+      "cost_usd": 0.00336,
+      "latency_ms": 5548.5,
+      "files_returned": [
+        "src/fastmcp/server/middleware/rate_limiting.py",
+        "tests/server/middleware/test_rate_limiting.py",
+        "src/fastmcp/server/middleware/response_limiting.py"
+      ],
+      "response": "I found rate limiting middleware in your codebase! Here are the main files:\n\n1. **`src/fastmcp/server/middleware/rate_limiting.py`** (confidence: 0.23)\n   - This is the main rate limiting middleware i"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "mode": "glyphh",
+  "results": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "\"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted\""
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "\"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted\""
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "latency_ms": 0,
+      "error": "\"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted\""
+    }
+  ]
+}

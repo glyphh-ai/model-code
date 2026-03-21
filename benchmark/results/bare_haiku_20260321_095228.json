@@ -1,0 +1,103 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "mode": "bare",
+  "results": [
+    {
+      "id": "search_01",
+      "type": "search",
+      "query": "Find the OAuth authorization middleware",
+      "expected_file": "src/fastmcp/server/middleware/authorization.py",
+      "found": false,
+      "rank": -1,
+      "tool_calls": 5,
+      "input_tokens": 7166,
+      "output_tokens": 590,
+      "total_tokens": 7756,
+      "cost_usd": 0.008093,
+      "latency_ms": 6049.0,
+      "files_read": [
+        "src/fastmcp/server/auth/middleware.py",
+        "src/fastmcp/server/auth/oauth_proxy/proxy.py"
+      ],
+      "response": "I'll search for OAuth authorization middleware in the codebase. Now let me look at the main OAuth authorization middleware files: Perfect! I found the OAuth authorization middleware. Here's the answer"
+    },
+    {
+      "id": "search_02",
+      "type": "search",
+      "query": "SSE transport connection handler",
+      "expected_file": "src/fastmcp/client/transports/sse.py",
+      "found": true,
+      "rank": -1,
+      "tool_calls": 5,
+      "input_tokens": 11833,
+      "output_tokens": 613,
+      "total_tokens": 12446,
+      "cost_usd": 0.011918,
+      "latency_ms": 8182.7,
+      "files_read": [
+        "src/fastmcp/client/transports/sse.py",
+        "tests/client/test_sse.py"
+      ],
+      "response": "I'll search for files related to SSE (Server-Sent Events) transport connection handling. Great! Let me read the SSE transport file to give you more details: Perfect! Let me also check the test file to"
+    },
+    {
+      "id": "search_03",
+      "type": "search",
+      "query": "tool injection middleware",
+      "expected_file": "src/fastmcp/server/middleware/tool_injection.py",
+      "found": true,
+      "rank": -1,
+      "tool_calls": 4,
+      "input_tokens": 5222,
+      "output_tokens": 470,
+      "total_tokens": 5692,
+      "cost_usd": 0.006058,
+      "latency_ms": 4917.1,
+      "files_read": [
+        "src/fastmcp/server/middleware/tool_injection.py"
+      ],
+      "response": "I'll search for files related to tool injection middleware in the codebase. Perfect! I found the tool injection middleware file. Let me read it to give you details: ## Answer\n\n**File Path:** `src/fast"
+    },
+    {
+      "id": "search_04",
+      "type": "search",
+      "query": "function argument parsing and validation",
+      "expected_file": "src/fastmcp/tools/function_parsing.py",
+      "found": true,
+      "rank": -1,
+      "tool_calls": 10,
+      "input_tokens": 14690,
+      "output_tokens": 608,
+      "total_tokens": 15298,
+      "cost_usd": 0.014184,
+      "latency_ms": 6752.7,
+      "files_read": [
+        "src/fastmcp/tools",
+        "src/fastmcp/tools/function_tool.py",
+        "src/fastmcp/tools/function_parsing.py",
+        "tests/server/test_input_validation.py",
+        "src/fastmcp/tools/base.py"
+      ],
+      "response": "I'll search for files related to function argument parsing and validation in the codebase. Let me search more specifically for function-related code: Perfect! I found the main file. Let me also check "
+    },
+    {
+      "id": "search_05",
+      "type": "search",
+      "query": "rate limiting middleware",
+      "expected_file": "src/fastmcp/server/middleware/rate_limiting.py",
+      "found": true,
+      "rank": -1,
+      "tool_calls": 5,
+      "input_tokens": 7215,
+      "output_tokens": 623,
+      "total_tokens": 7838,
+      "cost_usd": 0.008264,
+      "latency_ms": 8799.9,
+      "files_read": [
+        "src/fastmcp/server/middleware/rate_limiting.py",
+        "tests/server/middleware/test_rate_limiting.py"
+      ],
+      "response": "I'll search for rate limiting middleware in the codebase. Perfect! I found the rate limiting middleware. Let me read the main file: ## Answer\n\n**File:** `src/fastmcp/server/middleware/rate_limiting.py"
+    }
+  ]
+}
