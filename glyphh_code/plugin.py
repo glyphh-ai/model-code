@@ -54,11 +54,13 @@ def _compile_repo(repo_path: str, runtime_url: str) -> tuple[int, list[str]]:
 
     Returns (file_count, job_ids).
     """
+    env = {**__import__("os").environ, "PYTHONWARNINGS": "ignore"}
     result = subprocess.run(
         [sys.executable, "-m", "glyphh_code.compile", repo_path,
          "--runtime-url", runtime_url],
         capture_output=True,
         text=True,
+        env=env,
     )
 
     if result.returncode != 0:
@@ -104,7 +106,10 @@ def _wait_for_jobs(
     if not job_ids:
         return True
 
-    import requests
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        import requests
 
     pending = set(job_ids)
     deadline = time.time() + timeout
