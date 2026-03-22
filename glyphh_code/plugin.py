@@ -49,8 +49,11 @@ def _get_runtime_url() -> str | None:
         return None
 
 
-def _compile_repo(repo_path: str, runtime_url: str) -> int:
-    """Compile the repository into the Glyphh index."""
+def _compile_repo(repo_path: str, runtime_url: str) -> tuple[int, list[str]]:
+    """Compile the repository into the Glyphh index.
+
+    Returns (file_count, job_ids).
+    """
     result = subprocess.run(
         [sys.executable, "-m", "glyphh_code.compile", repo_path,
          "--runtime-url", runtime_url],
@@ -60,21 +63,78 @@ def _compile_repo(repo_path: str, runtime_url: str) -> int:
 
     if result.returncode != 0:
         click.secho(f"  Compile error: {result.stderr.strip()[:200]}", fg=theme.ERROR)
-        return 0
+        return 0, []
 
-    # Parse file count from output
+    # Parse file count and job IDs from output
+    file_count = 0
+    job_ids = []
     for line in result.stdout.strip().split("\n"):
         if "files indexed" in line:
             try:
-                return int(line.split(":")[1].strip().split()[0])
+                file_count = int(line.split(":")[1].strip().split()[0])
             except (IndexError, ValueError):
                 pass
         if "Encoded:" in line:
             try:
-                return int(line.split(":")[1].strip().split()[0])
+                file_count = int(line.split(":")[1].strip().split()[0])
             except (IndexError, ValueError):
                 pass
-    return 0
+        if "→ job " in line:
+            try:
+                job_id = line.split("→ job ")[1].strip()
+                if job_id and job_id != "?":
+                    job_ids.append(job_id)
+            except (IndexError, ValueError):
+                pass
+    return file_count, job_ids
+
+
+def _wait_for_jobs(
+    job_ids: list[str],
+    runtime_url: str,
+    org_id: str = "local-dev-org",
+    model_id: str = "code",
+    timeout: int = 300,
+    poll_interval: float = 1.0,
+) -> bool:
+    """Poll the runtime until all encoding jobs complete.
+
+    Returns True if all jobs completed successfully, False on error/timeout.
+    """
+    if not job_ids:
+        return True
+
+    import requests
+
+    pending = set(job_ids)
+    deadline = time.time() + timeout
+
+    while pending and time.time() < deadline:
+        time.sleep(poll_interval)
+        done = set()
+        for job_id in pending:
+            try:
+                r = requests.get(
+                    f"{runtime_url}/{org_id}/{model_id}/listener/jobs/{job_id}",
+                    timeout=10,
+                )
+                if r.status_code != 200:
+                    continue
+                status = r.json().get("status", "")
+                if status == "completed":
+                    done.add(job_id)
+                elif status == "error":
+                    msg = r.json().get("error", "unknown error")
+                    click.secho(f"  Job {job_id[:8]}… failed: {msg}", fg=theme.ERROR)
+                    done.add(job_id)
+            except Exception:
+                pass  # Network blip — retry on next poll
+        pending -= done
+
+    if pending:
+        click.secho(f"  Warning: {len(pending)} job(s) did not complete in {timeout}s", fg=theme.WARNING)
+        return False
+    return True
 
 
 def _deploy_model(runtime_url: str) -> bool:
@@ -295,16 +355,37 @@ def _cmd_init(args: str):
     click.echo()
 
     # Step 1: Deploy model (new weights / encoder on upgrade)
-    click.secho("  [1/3] Deploying model...", fg=theme.MUTED)
+    click.secho("  [1/5] Deploying model...", fg=theme.MUTED)
     _deploy_model(runtime_url)
 
-    # Step 2: Full recompile (encoder may have changed)
-    click.secho("  [2/3] Compiling codebase...", fg=theme.MUTED)
-    file_count = _compile_repo(repo, runtime_url)
+    # Step 2: Clear existing index (stale data from old weights)
+    click.secho("  [2/5] Clearing index...", fg=theme.MUTED)
+    try:
+        import httpx
+        with httpx.Client(timeout=30) as client:
+            r = client.delete(f"{runtime_url}/local-dev-org/code/data")
+            if r.status_code == 200:
+                deleted = r.json().get("glyphs_deleted", 0)
+                if deleted:
+                    click.secho(f"         {deleted} stale glyphs removed", fg=theme.TEXT_DIM)
+    except Exception:
+        pass  # Fresh install — nothing to clear
+
+    # Step 3: Full compile
+    click.secho("  [3/5] Compiling codebase...", fg=theme.MUTED)
+    file_count, job_ids = _compile_repo(repo, runtime_url)
     click.secho(f"         {file_count} files indexed", fg=theme.TEXT_DIM)
 
-    # Step 3: Configure Claude Code (update paths + instructions on upgrade)
-    click.secho("  [3/3] Configuring Claude Code...", fg=theme.MUTED)
+    # Step 4: Wait for encoding to complete
+    if job_ids:
+        click.secho(f"  [4/5] Encoding {len(job_ids)} batch(es)...", fg=theme.MUTED)
+        _wait_for_jobs(job_ids, runtime_url)
+        click.secho("         encoding complete", fg=theme.TEXT_DIM)
+    else:
+        click.secho("  [4/5] Encoding... skipped (no jobs)", fg=theme.MUTED)
+
+    # Step 5: Configure Claude Code (update paths + instructions on upgrade)
+    click.secho("  [5/5] Configuring Claude Code...", fg=theme.MUTED)
     dev_info = json.loads((_GLYPHH_DIR / "dev.json").read_text())
     mcp_url = dev_info.get("mcp_url", f"{runtime_url}/local-dev-org/code/mcp")
     _configure_claude_code(repo, mcp_url, is_upgrade=is_upgrade)
@@ -339,7 +420,10 @@ def _cmd_compile(args: str):
 
     repo = str(Path(args.strip() or ".").resolve())
     click.secho(f"  Compiling: {repo}", fg=theme.TEXT)
-    count = _compile_repo(repo, runtime_url)
+    count, job_ids = _compile_repo(repo, runtime_url)
+    if job_ids:
+        click.secho(f"  Waiting for {len(job_ids)} encoding job(s)...", fg=theme.MUTED)
+        _wait_for_jobs(job_ids, runtime_url)
     click.secho(f"  Done: {count} files indexed", fg=theme.SUCCESS)
 
 

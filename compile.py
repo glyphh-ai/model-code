@@ -288,11 +288,11 @@ def compile_repo(
             print(f"  {r['concept_text']:50s}  {defines_preview or ' '.join(tokens)}")
         if len(records) > 20:
             print(f"  ... and {len(records) - 20} more")
-        return len(records)
+        return len(records), []
 
     if not records:
         print("Nothing to index.")
-        return 0
+        return 0, []
 
     # Send records in hierarchical format matching the encoder config.
     # The listener auto-maps layer/segment/role structure for encoding
@@ -326,15 +326,17 @@ def compile_repo(
 
     # Post to runtime in batches
     start = time.time()
+    job_ids = []
     for i in range(0, len(hierarchical_records), BATCH_SIZE):
         batch = hierarchical_records[i : i + BATCH_SIZE]
         result = post_to_listener(batch, runtime_url, org_id, model_id, token)
         job_id = result.get("job_id", "?")
+        job_ids.append(job_id)
         print(f"  Batch {i // BATCH_SIZE + 1}: {len(batch)} records → job {job_id}")
 
     elapsed = time.time() - start
     print(f"Done: {len(records)} files indexed in {elapsed:.1f}s")
-    return len(records)
+    return len(records), job_ids
 
 
 if __name__ == "__main__":
