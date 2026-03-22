@@ -21,13 +21,15 @@ NEVER use Glob to find files. Use glyphh_search instead.
 NEVER use the Agent tool to explore the codebase. Use glyphh_search instead.
 NEVER scan directories to find relevant code.
 NEVER read multiple files speculatively.
-Only fall back to Grep or Glob if glyphh_search returns no results above 0.50.
+Only fall back to Grep or Glob if glyphh_search returns no results above 0.05.
+Call glyphh_search at most twice for the same question.
+If two queries both return below 0.50, fall back to Grep immediately.
 
 Search results include top_tokens and imports for each file.
 Use top_tokens to understand what the file is about.
 Use imports to understand what it depends on.
 Only read the file if top_tokens and imports do not answer the question.
-Prefer files with confidence above 0.70.
+Prefer files with confidence above 0.15.
 If the result state is ASK, tell the user the candidates and ask which to use.
 
 
@@ -36,7 +38,7 @@ If the result state is ASK, tell the user the candidates and ask which to use.
 When investigating a bug or error:
   1. Call glyphh_search with the error type or concept from the stack trace
   2. Check top_tokens and imports from results before reading any file
-  3. Read only files with confidence above 0.70
+  3. Read only files with confidence above 0.15
   4. Call glyphh_related on the target file before making any change
 
 
@@ -78,7 +80,7 @@ glyphh_search returns:
   state         DONE or ASK
   matches       list of results when state is DONE
     file        relative file path
-    confidence  0.0 to 1.0, prefer above 0.70
+    confidence  0.0 to 1.0, prefer above 0.15
     top_tokens  dominant concepts in the file
     imports     what the file depends on
     extension   file type
