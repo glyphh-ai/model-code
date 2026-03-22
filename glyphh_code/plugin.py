@@ -107,7 +107,7 @@ def _deploy_model(runtime_url: str) -> bool:
         return False
 
 
-def _configure_claude_code(repo_path: str, mcp_url: str):
+def _configure_claude_code(repo_path: str, mcp_url: str, is_upgrade: bool = False):
     """Configure Claude Code: MCP server, CLAUDE.md, hooks."""
     repo = Path(repo_path).resolve()
 
@@ -128,7 +128,7 @@ def _configure_claude_code(repo_path: str, mcp_url: str):
         click.secho("  ✗ Claude Code CLI not found", fg=theme.WARNING)
         click.secho(f"    Run: claude mcp add --transport http glyphh {mcp_url}", fg=theme.TEXT_DIM)
 
-    # 2. Add Glyphh instructions to CLAUDE.md
+    # 2. Add/update Glyphh instructions in CLAUDE.md
     target_claude_md = repo / "CLAUDE.md"
     source_claude_md = _PACKAGE_DIR / "CLAUDE.md"
     _GLYPHH_MARKER = "# Glyphh Code Intelligence"
@@ -137,12 +137,24 @@ def _configure_claude_code(repo_path: str, mcp_url: str):
         if not target_claude_md.exists():
             target_claude_md.write_text(glyphh_section)
             click.secho("  ✓ CLAUDE.md created with Glyphh instructions", fg=theme.SUCCESS)
-        elif _GLYPHH_MARKER not in target_claude_md.read_text():
-            with open(target_claude_md, "a") as f:
-                f.write(f"\n\n{glyphh_section}")
-            click.secho("  ✓ Glyphh instructions appended to CLAUDE.md", fg=theme.SUCCESS)
         else:
-            click.secho("  ○ CLAUDE.md already has Glyphh instructions", fg=theme.TEXT_DIM)
+            existing = target_claude_md.read_text()
+            if _GLYPHH_MARKER not in existing:
+                # First time — append to existing CLAUDE.md
+                with open(target_claude_md, "a") as f:
+                    f.write(f"\n\n{glyphh_section}")
+                click.secho("  ✓ Glyphh instructions appended to CLAUDE.md", fg=theme.SUCCESS)
+            elif is_upgrade:
+                # Upgrade — replace the Glyphh section with latest version
+                marker_pos = existing.index(_GLYPHH_MARKER)
+                prefix = existing[:marker_pos].rstrip()
+                if prefix:
+                    target_claude_md.write_text(f"{prefix}\n\n{glyphh_section}")
+                else:
+                    target_claude_md.write_text(glyphh_section)
+                click.secho("  ✓ Glyphh instructions updated in CLAUDE.md", fg=theme.SUCCESS)
+            else:
+                click.secho("  ○ CLAUDE.md already has Glyphh instructions", fg=theme.TEXT_DIM)
 
     # 3. Add hooks + permissions to .claude/settings.json
     claude_dir = repo / ".claude"
@@ -162,14 +174,19 @@ def _configure_claude_code(repo_path: str, mcp_url: str):
     if "mcp__glyphh__*" not in allow_list:
         allow_list.append("mcp__glyphh__*")
 
-    # Hooks
+    # Hooks — on upgrade, refresh paths (package dir may have moved)
     hooks = settings.setdefault("hooks", {})
 
     enforce_script = _PACKAGE_DIR / "hooks" / "enforce-glyphh-search.sh"
     if enforce_script.exists():
         pre_hooks = hooks.setdefault("PreToolUse", [])
-        existing_matchers = [h.get("matcher") for h in pre_hooks]
-        if "Grep|Glob" not in existing_matchers:
+        if is_upgrade:
+            # Replace existing enforce hook with updated path
+            pre_hooks[:] = [
+                h for h in pre_hooks
+                if "enforce-glyphh-search" not in h.get("hooks", [{}])[0].get("command", "")
+            ]
+        if not any(h.get("matcher") == "Grep|Glob" for h in pre_hooks):
             pre_hooks.append({
                 "matcher": "Grep|Glob",
                 "hooks": [{"type": "command", "command": str(enforce_script)}],
@@ -178,15 +195,20 @@ def _configure_claude_code(repo_path: str, mcp_url: str):
     compile_script = _PACKAGE_DIR / "hooks" / "post-git-compile.sh"
     if compile_script.exists():
         post_hooks = hooks.setdefault("PostToolUse", [])
-        existing_cmds = [
-            h.get("hooks", [{}])[0].get("command", "") for h in post_hooks
-        ]
-        # Remove old post-commit-compile hook if present (replaced by post-git-compile)
-        post_hooks[:] = [
-            h for h in post_hooks
-            if "post-commit-compile" not in h.get("hooks", [{}])[0].get("command", "")
-        ]
-        if not any("post-git-compile" in c for c in existing_cmds):
+        if is_upgrade:
+            # Replace existing compile hook with updated path
+            post_hooks[:] = [
+                h for h in post_hooks
+                if "post-git-compile" not in h.get("hooks", [{}])[0].get("command", "")
+                and "post-commit-compile" not in h.get("hooks", [{}])[0].get("command", "")
+            ]
+        else:
+            # First init — just clean up legacy hook name
+            post_hooks[:] = [
+                h for h in post_hooks
+                if "post-commit-compile" not in h.get("hooks", [{}])[0].get("command", "")
+            ]
+        if not any("post-git-compile" in h.get("hooks", [{}])[0].get("command", "") for h in post_hooks):
             post_hooks.append({
                 "matcher": "Bash",
                 "hooks": [{"type": "command", "command": f"{compile_script} {repo}"}],
@@ -236,36 +258,47 @@ def _start_dev_server() -> str | None:
 
 
 def _cmd_init(args: str):
-    """code init [path] — full setup for a repository."""
+    """code init [path] — setup or upgrade a repository."""
     repo = str(Path(args.strip() or ".").resolve())
 
     if not Path(repo).is_dir():
         click.secho(f"  Not a directory: {repo}", fg=theme.ERROR)
         return
 
+    # Detect upgrade: state file exists for this repo
+    is_upgrade = False
+    if _STATE_FILE.exists():
+        try:
+            prev = json.loads(_STATE_FILE.read_text())
+            if prev.get("repo") == repo:
+                is_upgrade = True
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     runtime_url = _start_dev_server()
     if not runtime_url:
         return
 
+    mode = "upgrade" if is_upgrade else "init"
     click.echo()
-    click.secho(f"  Glyphh Code  ·  init", fg=theme.TEXT, bold=True)
+    click.secho(f"  Glyphh Code  ·  {mode}", fg=theme.TEXT, bold=True)
     click.secho(f"  {repo}", fg=theme.TEXT_DIM)
     click.echo()
 
-    # Step 1: Deploy model
+    # Step 1: Deploy model (new weights / encoder on upgrade)
     click.secho("  [1/3] Deploying model...", fg=theme.MUTED)
     _deploy_model(runtime_url)
 
-    # Step 2: Compile
+    # Step 2: Full recompile (encoder may have changed)
     click.secho("  [2/3] Compiling codebase...", fg=theme.MUTED)
     file_count = _compile_repo(repo, runtime_url)
     click.secho(f"         {file_count} files indexed", fg=theme.TEXT_DIM)
 
-    # Step 3: Configure Claude Code
+    # Step 3: Configure Claude Code (update paths + instructions on upgrade)
     click.secho("  [3/3] Configuring Claude Code...", fg=theme.MUTED)
     dev_info = json.loads((_GLYPHH_DIR / "dev.json").read_text())
     mcp_url = dev_info.get("mcp_url", f"{runtime_url}/local-dev-org/code/mcp")
-    _configure_claude_code(repo, mcp_url)
+    _configure_claude_code(repo, mcp_url, is_upgrade=is_upgrade)
 
     # Save state
     _STATE_FILE.write_text(json.dumps({
@@ -277,7 +310,8 @@ def _cmd_init(args: str):
 
     click.echo()
     dot = click.style("●", fg=theme.SUCCESS)
-    click.echo(f"  {dot} {click.style('ready', fg=theme.SUCCESS)}")
+    label = "upgraded" if is_upgrade else "ready"
+    click.echo(f"  {dot} {click.style(label, fg=theme.SUCCESS)}")
     click.echo()
     click.secho(f"  Repo:      {repo}", fg=theme.TEXT_DIM)
     click.secho(f"  Files:     {file_count} indexed", fg=theme.TEXT_DIM)
