@@ -141,6 +141,28 @@ def get_changed_files(repo_root: str, commit_hash: str = "HEAD") -> list[str]:
     ]
 
 
+def get_changed_files_range(repo_root: str, diff_range: str) -> list[str]:
+    """Get files changed in a commit range (e.g. 'abc123..HEAD').
+
+    Used after git pull/merge/rebase to find all files that changed
+    between the pre-operation HEAD and the current HEAD.
+    """
+    result = subprocess.run(
+        ["git", "diff", "--name-only", diff_range],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
+    )
+    if result.returncode != 0:
+        print(f"Warning: git diff failed for range {diff_range}: {result.stderr.strip()}")
+        return []
+    return [
+        os.path.join(repo_root, f)
+        for f in result.stdout.strip().split("\n")
+        if f
+    ]
+
+
 def post_to_listener(
     records: list[dict],
     runtime_url: str,
@@ -179,6 +201,7 @@ def compile_repo(
     token: str | None = None,
     incremental: bool = False,
     diff: str | None = None,
+    diff_range: str | None = None,
     diff_repo: str | None = None,
     dry_run: bool = False,
 ) -> int:
@@ -203,6 +226,21 @@ def compile_repo(
     if diff:
         files = get_changed_files(repo_root, diff)
         print(f"Mode: diff {diff} ({len(files)} changed files)")
+    elif diff_range:
+        diff_dir = os.path.abspath(diff_repo) if diff_repo else repo_root
+        files = get_changed_files_range(diff_dir, diff_range)
+        if diff_repo and diff_dir != repo_root:
+            remapped = []
+            for f in files:
+                if os.path.exists(f):
+                    remapped.append(f)
+                else:
+                    rel = os.path.relpath(f, diff_dir)
+                    full = os.path.join(diff_dir, rel)
+                    if os.path.exists(full):
+                        remapped.append(full)
+            files = remapped
+        print(f"Mode: diff-range {diff_range} ({len(files)} changed files)")
     elif incremental:
         # If diff_repo is set, diff there and remap paths to repo_root
         diff_dir = os.path.abspath(diff_repo) if diff_repo else repo_root
@@ -321,6 +359,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--incremental", action="store_true")
     parser.add_argument("--diff", type=str, help="Compile changes from a specific commit")
+    parser.add_argument("--diff-range", type=str, help="Compile changes in a commit range (e.g. ORIG_HEAD..HEAD)")
     parser.add_argument("--diff-repo", type=str, help="Git repo to diff (when commit is in a child repo/submodule)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -336,6 +375,7 @@ if __name__ == "__main__":
         token=token,
         incremental=args.incremental,
         diff=args.diff,
+        diff_range=args.diff_range,
         diff_repo=args.diff_repo,
         dry_run=args.dry_run,
     )

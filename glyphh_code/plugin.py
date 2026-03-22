@@ -169,13 +169,18 @@ def _configure_claude_code(repo_path: str, mcp_url: str):
                 "hooks": [{"type": "command", "command": str(enforce_script)}],
             })
 
-    compile_script = _PACKAGE_DIR / "hooks" / "post-commit-compile.sh"
+    compile_script = _PACKAGE_DIR / "hooks" / "post-git-compile.sh"
     if compile_script.exists():
         post_hooks = hooks.setdefault("PostToolUse", [])
         existing_cmds = [
             h.get("hooks", [{}])[0].get("command", "") for h in post_hooks
         ]
-        if not any("post-commit-compile" in c for c in existing_cmds):
+        # Remove old post-commit-compile hook if present (replaced by post-git-compile)
+        post_hooks[:] = [
+            h for h in post_hooks
+            if "post-commit-compile" not in h.get("hooks", [{}])[0].get("command", "")
+        ]
+        if not any("post-git-compile" in c for c in existing_cmds):
             post_hooks.append({
                 "matcher": "Bash",
                 "hooks": [{"type": "command", "command": f"{compile_script} {repo}"}],

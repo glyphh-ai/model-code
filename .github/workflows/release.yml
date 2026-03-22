@@ -15,8 +15,6 @@ jobs:
         python-version: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.RUNTIME_RELEASES_TOKEN }}
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -39,8 +37,6 @@ jobs:
       id-token: write  # Required for Trusted Publisher OIDC
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.RUNTIME_RELEASES_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -88,4 +84,4 @@ jobs:
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.RUNTIME_RELEASES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
