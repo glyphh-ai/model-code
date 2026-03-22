@@ -1,45 +1,30 @@
 # Glyphh Code Intelligence
 
-This project uses Glyphh for codebase search.
+This project uses Glyphh for semantic codebase analysis.
 The Glyphh index is compiled from every file in this repo.
 Follow these rules in every session without exception.
 
 
 ## Tools available
 
-glyphh_search   find files by natural language query
-glyphh_related  find files related to a given file
+glyphh_search   find files by semantic query (concepts, not exact strings)
+glyphh_related  find files related to a given file (blast radius)
 glyphh_stats    index statistics
 
 
-## Navigation rules
+## When to use Glyphh vs Grep
 
-ALWAYS call glyphh_search before reading any file.
-ALWAYS call glyphh_related before editing a file.
-NEVER use Grep to find files. Use glyphh_search instead.
-NEVER use Glob to find files. Use glyphh_search instead.
-NEVER use the Agent tool to explore the codebase. Use glyphh_search instead.
-NEVER scan directories to find relevant code.
-NEVER read multiple files speculatively.
-Only fall back to Grep or Glob if glyphh_search returns no results above 0.05.
-Call glyphh_search at most twice for the same question.
-If two queries both return below 0.50, fall back to Grep immediately.
+Use Grep/Glob for **navigation** — finding where something is defined,
+exact string matches, symbol lookups. Grep is faster and cheaper.
 
-Search results include top_tokens and imports for each file.
-Use top_tokens to understand what the file is about.
-Use imports to understand what it depends on.
-Only read the file if top_tokens and imports do not answer the question.
-Prefer files with confidence above 0.15.
-If the result state is ASK, tell the user the candidates and ask which to use.
+Use glyphh_search for **semantic queries** that Grep cannot answer:
+  "files related to the payment retry flow"
+  "what handles webhook validation"
+  "authentication middleware chain"
 
-
-## Debugging rules
-
-When investigating a bug or error:
-  1. Call glyphh_search with the error type or concept from the stack trace
-  2. Check top_tokens and imports from results before reading any file
-  3. Read only files with confidence above 0.15
-  4. Call glyphh_related on the target file before making any change
+Use glyphh_related **before editing** any file to understand blast radius.
+This returns semantically similar files that may need coordinated changes.
+There is no Grep equivalent for this.
 
 
 ## Editing rules
@@ -54,41 +39,21 @@ After editing:
   No manual recompile needed.
 
 
-## Query guide
-
-Good queries for glyphh_search use specific domain vocabulary:
-  auth token validation
-  stripe webhook handler
-  user profile fetch
-  database connection pool
-  error boundary component
-  payment retry logic
-  session expiry check
-
-Poor queries are too generic and will return low-confidence results:
-  utils
-  helper
-  index
-  common
-  base
-
-
 ## Search result shape
 
 glyphh_search returns:
 
-  state         DONE or ASK
-  matches       list of results when state is DONE
+  state         DONE
+  matches       list of results
     file        relative file path
     confidence  0.0 to 1.0, prefer above 0.15
     top_tokens  dominant concepts in the file
     imports     what the file depends on
     extension   file type
-  candidates    list of options when state is ASK
 
 glyphh_related returns:
 
-  state         DONE or ASK
+  state         DONE
   file          the queried file
   related       list of semantically similar files
     file        relative file path

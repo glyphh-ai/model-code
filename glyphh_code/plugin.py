@@ -241,20 +241,14 @@ def _configure_claude_code(repo_path: str, mcp_url: str, is_upgrade: bool = Fals
     # Hooks — on upgrade, refresh paths (package dir may have moved)
     hooks = settings.setdefault("hooks", {})
 
-    enforce_script = _PACKAGE_DIR / "hooks" / "enforce-glyphh-search.sh"
-    if enforce_script.exists():
-        pre_hooks = hooks.setdefault("PreToolUse", [])
-        if is_upgrade:
-            # Replace existing enforce hook with updated path
-            pre_hooks[:] = [
-                h for h in pre_hooks
-                if "enforce-glyphh-search" not in h.get("hooks", [{}])[0].get("command", "")
-            ]
-        if not any(h.get("matcher") == "Grep|Glob" for h in pre_hooks):
-            pre_hooks.append({
-                "matcher": "Grep|Glob",
-                "hooks": [{"type": "command", "command": str(enforce_script)}],
-            })
+    # Remove legacy enforce-glyphh-search hook (Grep/Glob are allowed now)
+    if "PreToolUse" in hooks:
+        hooks["PreToolUse"] = [
+            h for h in hooks["PreToolUse"]
+            if "enforce-glyphh-search" not in h.get("hooks", [{}])[0].get("command", "")
+        ]
+        if not hooks["PreToolUse"]:
+            del hooks["PreToolUse"]
 
     compile_script = _PACKAGE_DIR / "hooks" / "post-git-compile.sh"
     if compile_script.exists():
