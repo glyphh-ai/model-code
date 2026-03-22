@@ -377,7 +377,7 @@ def _cmd_init(args: str):
 
     # Step 4: Wait for encoding to complete
     if job_ids:
-        click.secho(f"  [4/5] Encoding {len(job_ids)} batch(es)...", fg=theme.MUTED)
+        click.secho("  [4/5] Encoding...", fg=theme.MUTED)
         _wait_for_jobs(job_ids, runtime_url)
         click.secho("         encoding complete", fg=theme.TEXT_DIM)
     else:

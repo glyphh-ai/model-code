@@ -324,19 +324,16 @@ def compile_repo(
         }
         hierarchical_records.append(hier)
 
-    # Post to runtime in batches
+    # Post all records in a single request — the listener processes internal
+    # batches sequentially within one job, avoiding SQLite write contention.
     start = time.time()
-    job_ids = []
-    for i in range(0, len(hierarchical_records), BATCH_SIZE):
-        batch = hierarchical_records[i : i + BATCH_SIZE]
-        result = post_to_listener(batch, runtime_url, org_id, model_id, token)
-        job_id = result.get("job_id", "?")
-        job_ids.append(job_id)
-        print(f"  Batch {i // BATCH_SIZE + 1}: {len(batch)} records → job {job_id}")
+    result = post_to_listener(hierarchical_records, runtime_url, org_id, model_id, token)
+    job_id = result.get("job_id", "?")
+    print(f"  {len(hierarchical_records)} records → job {job_id}")
 
     elapsed = time.time() - start
     print(f"Done: {len(records)} files indexed in {elapsed:.1f}s")
-    return len(records), job_ids
+    return len(records), [job_id] if job_id != "?" else []
 
 
 if __name__ == "__main__":
