@@ -14,9 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from encoder import ENCODER_CONFIG
+from glyphh_code.encoder import ENCODER_CONFIG
 
 
 def build():

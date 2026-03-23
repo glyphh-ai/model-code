@@ -5,7 +5,7 @@ from glyphh import Encoder
 from glyphh.core.types import Concept
 from glyphh.core.ops import cosine_similarity
 
-from encoder import ENCODER_CONFIG, encode_query
+from glyphh_code.encoder import ENCODER_CONFIG, encode_query
 
 # Layer weights matching the encoder config
 _LAYER_WEIGHTS = {"path": 0.25, "symbols": 0.25, "content": 0.50}
@@ -257,22 +257,22 @@ class TestMCPToolSchemas:
     """Validate MCP tool definitions."""
 
     def test_mcp_tools_defined(self):
-        from encoder import MCP_TOOLS
+        from glyphh_code.encoder import MCP_TOOLS
         assert isinstance(MCP_TOOLS, list)
         assert len(MCP_TOOLS) >= 2
 
     def test_search_tool_schema(self):
-        from encoder import MCP_TOOLS
+        from glyphh_code.encoder import MCP_TOOLS
         search = next(t for t in MCP_TOOLS if t["name"] == "glyphh_search")
         assert "description" in search
         assert search["input_schema"]["required"] == ["query"]
 
     def test_related_tool_schema(self):
-        from encoder import MCP_TOOLS
+        from glyphh_code.encoder import MCP_TOOLS
         related = next(t for t in MCP_TOOLS if t["name"] == "glyphh_related")
         assert related["input_schema"]["required"] == ["file_path"]
 
     def test_handle_mcp_tool_defined(self):
-        from encoder import handle_mcp_tool
+        from glyphh_code.encoder import handle_mcp_tool
         import asyncio
         assert asyncio.iscoroutinefunction(handle_mcp_tool)

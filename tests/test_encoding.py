@@ -3,7 +3,7 @@
 import pytest
 from glyphh import Encoder
 from glyphh.core.types import Concept
-from encoder import (
+from glyphh_code.encoder import (
     ENCODER_CONFIG,
     encode_query,
     entry_to_record,
@@ -222,34 +222,34 @@ class TestFileToRecord:
     def test_own_encoder(self):
         """encoder.py should be indexable."""
         from pathlib import Path
-        from encoder import file_to_record
+        from glyphh_code.encoder import file_to_record
 
         model_dir = str(Path(__file__).parent.parent)
         result = file_to_record(
-            str(Path(__file__).parent.parent / "encoder.py"),
+            str(Path(__file__).parent.parent / "glyphh_code" / "encoder.py"),
             repo_root=model_dir,
         )
         assert result is not None
-        assert result["concept_text"] == "encoder.py"
+        assert result["concept_text"] == "glyphh_code/encoder.py"
         assert "encoder" in result["attributes"]["identifiers"]
         assert len(result["metadata"]["top_tokens"]) > 0
 
     def test_skips_binary(self, tmp_path):
-        from encoder import file_to_record
+        from glyphh_code.encoder import file_to_record
 
         binary = tmp_path / "image.png"
         binary.write_bytes(b"\x89PNG\r\n\x1a\n")
         assert file_to_record(str(binary)) is None
 
     def test_skips_large_file(self, tmp_path):
-        from encoder import file_to_record, MAX_FILE_BYTES
+        from glyphh_code.encoder import file_to_record, MAX_FILE_BYTES
 
         big = tmp_path / "huge.py"
         big.write_text("x = 1\n" * (MAX_FILE_BYTES // 5))
         assert file_to_record(str(big)) is None
 
     def test_skips_nonexistent(self):
-        from encoder import file_to_record
+        from glyphh_code.encoder import file_to_record
 
         assert file_to_record("/nonexistent/path/foo.py") is None
 

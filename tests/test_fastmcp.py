@@ -16,7 +16,7 @@ from glyphh import Encoder
 from glyphh.core.types import Concept
 from glyphh.core.ops import cosine_similarity
 
-from encoder import ENCODER_CONFIG, encode_query, file_to_record
+from glyphh_code.encoder import ENCODER_CONFIG, encode_query, file_to_record
 
 # Layer weights — must match ENCODER_CONFIG
 _LAYER_WEIGHTS = {"path": 0.25, "symbols": 0.25, "content": 0.50}

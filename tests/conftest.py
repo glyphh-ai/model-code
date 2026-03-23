@@ -5,14 +5,12 @@ from pathlib import Path
 
 import pytest
 
-# Ensure model directory is importable
-sys.path.insert(0, str(Path(__file__).parent.parent))
 # Ensure glyphh SDK is importable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "glyphh-runtime"))
 
 from glyphh import Encoder
 from glyphh.core.types import Concept
-from encoder import (
+from glyphh_code.encoder import (
     ENCODER_CONFIG,
     encode_query,
     entry_to_record,
