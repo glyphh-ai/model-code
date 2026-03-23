@@ -576,6 +576,48 @@ MCP_TOOLS = [
             "properties": {},
         },
     },
+    {
+        "name": "glyphh_drift",
+        "description": (
+            "Semantic drift score for a file — how much has its meaning changed "
+            "since the last index build? Returns a drift score (0.0 = identical, "
+            "1.0 = complete rewrite) and a label: cosmetic, moderate, significant, "
+            "or architectural. No Grep equivalent — measures semantic change, not "
+            "textual diff size."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path of the file to score drift for",
+                },
+            },
+            "required": ["file_path"],
+        },
+    },
+    {
+        "name": "glyphh_risk",
+        "description": (
+            "Risk profile for changed files — aggregates semantic drift across "
+            "all files modified since the last index build (or a specific git ref). "
+            "Returns per-file drift scores, overall risk label, and hot files "
+            "that may need human review. No Grep equivalent."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "git_ref": {
+                    "type": "string",
+                    "default": "HEAD",
+                    "description": (
+                        "Git ref to compare against (default: HEAD). "
+                        "Use 'HEAD~1' for the last commit, a branch name, or a commit hash."
+                    ),
+                },
+            },
+        },
+    },
 ]
 
 
@@ -597,6 +639,8 @@ async def handle_mcp_tool(tool_name: str, arguments: dict, context: dict) -> dic
         "glyphh_search": _handle_search,
         "glyphh_related": _handle_related,
         "glyphh_stats": _handle_stats,
+        "glyphh_drift": _handle_drift,
+        "glyphh_risk": _handle_risk,
     }
 
     handler = handlers.get(tool_name)
@@ -1225,3 +1269,147 @@ async def _handle_stats(arguments: dict, context: dict) -> dict:
         "confidence": 1.0,
         "match_method": "stats",
     }
+
+
+# ---------------------------------------------------------------------------
+# Drift handler — semantic change since last index
+# ---------------------------------------------------------------------------
+
+async def _handle_drift(arguments: dict, context: dict) -> dict:
+    """Compute semantic drift for a single file.
+
+    Compares the stored glyph (from last compile) with a freshly-encoded
+    version of the file on disk. Returns drift score and label.
+    """
+    import numpy as np
+    from glyphh.core.types import Concept
+    from domains.models.db_models import Glyph
+    from sqlalchemy import select
+
+    file_path = arguments.get("file_path", "")
+    if not file_path.strip():
+        return {"state": "ERROR", "error": "file_path is required."}
+
+    org_id = context["org_id"]
+    model_id = context["model_id"]
+    encoder = context["encoder"]
+
+    # 1. Look up stored glyph
+    async with context["session_factory"]() as session:
+        result = await session.execute(
+            select(Glyph).where(
+                Glyph.org_id == org_id,
+                Glyph.model_id == model_id,
+                Glyph.concept_text == file_path,
+            ).limit(1)
+        )
+        glyph_row = result.scalars().first()
+
+    if glyph_row is None:
+        return {
+            "state": "ASK",
+            "error": f"File not in index: {file_path}. Run: glyphh-code compile .",
+        }
+
+    stored_vec = np.array(glyph_row.embedding, dtype=np.int8)
+
+    # 2. Re-encode current file from disk
+    # CWD of the server should be the repo root (uvicorn runs from there)
+    # file_path is relative (concept_text = relative path from compile)
+    abs_path = Path(file_path)
+    if not abs_path.is_absolute():
+        abs_path = Path(".") / file_path
+
+    record = file_to_record(str(abs_path), ".")
+    if record is None:
+        return {
+            "state": "ASK",
+            "error": f"Cannot read or encode file: {file_path}",
+        }
+
+    concept = Concept(
+        name=record["concept_text"],
+        attributes=record["attributes"],
+    )
+    current_glyph = encoder.encode(concept)
+    current_vec = np.array(current_glyph.global_cortex.data, dtype=np.int8)
+
+    # 3. Compute drift
+    from glyphh_code.drift import compute_drift, drift_label
+
+    score = compute_drift(stored_vec, current_vec)
+    label = drift_label(score)
+
+    return {
+        "state": "DONE",
+        "file": file_path,
+        "drift_score": score,
+        "drift_label": label,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Risk handler — aggregate drift for changed files
+# ---------------------------------------------------------------------------
+
+async def _handle_risk(arguments: dict, context: dict) -> dict:
+    """Score commit risk by aggregating per-file semantic drift.
+
+    Gets changed files from git, computes drift for each, and returns
+    an aggregate risk profile.
+    """
+    import subprocess
+
+    git_ref = arguments.get("git_ref", "HEAD")
+    repo_root = context.get("repo_root", ".")
+
+    # Get list of changed files from git
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", git_ref],
+            capture_output=True, text=True, cwd=repo_root, timeout=10,
+        )
+        if result.returncode != 0:
+            # Try as a commit — diff against parent
+            result = subprocess.run(
+                ["git", "diff", "--name-only", f"{git_ref}~1", git_ref],
+                capture_output=True, text=True, cwd=repo_root, timeout=10,
+            )
+        changed_files = [
+            f.strip() for f in result.stdout.strip().split("\n")
+            if f.strip() and Path(f.strip()).suffix in INDEXABLE_EXTENSIONS
+        ]
+    except Exception as e:
+        return {"state": "ERROR", "error": f"git error: {e}"}
+
+    if not changed_files:
+        return {
+            "state": "DONE",
+            "risk_label": "cosmetic",
+            "files": {},
+            "max_drift": 0.0,
+            "mean_drift": 0.0,
+            "hot_files": [],
+            "message": "No indexable files changed.",
+        }
+
+    # Compute drift for each changed file
+    drift_scores: dict[str, float] = {}
+    errors: list[str] = []
+    for fp in changed_files:
+        r = await _handle_drift(
+            {"file_path": fp},
+            context,
+        )
+        if r.get("state") == "DONE":
+            drift_scores[fp] = r["drift_score"]
+        else:
+            errors.append(f"{fp}: {r.get('error', 'unknown')}")
+
+    from glyphh_code.drift import score_commit_files
+
+    risk = score_commit_files(drift_scores)
+    risk["state"] = "DONE"
+    if errors:
+        risk["errors"] = errors
+    return risk

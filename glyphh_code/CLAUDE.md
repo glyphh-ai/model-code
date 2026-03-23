@@ -9,6 +9,8 @@ Follow these rules in every session without exception.
 
 glyphh_search   find files by semantic query (concepts, not exact strings)
 glyphh_related  find files related to a given file (blast radius)
+glyphh_drift    semantic drift score for a file since last index build
+glyphh_risk     risk profile for changed files (aggregates drift scores)
 glyphh_stats    index statistics
 
 
@@ -39,6 +41,15 @@ After editing:
   No manual recompile needed.
 
 
+## Deploy and merge rules
+
+Before suggesting a deploy or approving a merge:
+  1. Call glyphh_risk to score the current commit
+  2. If risk_label is significant or architectural, flag for human review
+  3. If hot_files is non-empty, call glyphh_drift on each hot file
+  4. Report the risk profile to the user before proceeding
+
+
 ## Search result shape
 
 glyphh_search returns:
@@ -60,3 +71,19 @@ glyphh_related returns:
     similarity  0.0 to 1.0
     top_tokens  dominant concepts
     imports     dependencies
+
+glyphh_drift returns:
+
+  state         DONE
+  file          the queried file
+  drift_score   0.0 to 1.0
+  drift_label   cosmetic, moderate, significant, or architectural
+
+glyphh_risk returns:
+
+  state         DONE
+  files         per-file drift scores
+  max_drift     highest single-file drift
+  mean_drift    average across changed files
+  risk_label    cosmetic, moderate, significant, or architectural
+  hot_files     files above the moderate threshold
