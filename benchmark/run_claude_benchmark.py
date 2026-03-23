@@ -4,8 +4,7 @@
 Runs real Claude Code sessions against a target repo. Measures the actual
 tool calls, tokens, and cost Claude Code uses to complete each task.
 
-Three test types:
-  navigation    — find a specific file (Grep's strength)
+Two test types:
   blast_radius  — "what breaks if I edit X?" (Glyphh's strength)
   semantic      — conceptual queries with no exact string match
 
@@ -62,16 +61,6 @@ MCP_CONFIG_FILE = _BENCHMARK_DIR / ".mcp-benchmark.json"
 STATUS_FILE = RESULTS_DIR / "status.json"
 
 # --- Prompts ---
-# Navigation: both modes get the same task — find and read a file.
-PROMPT_NAV = (
-    "TASK: Find the most relevant source file for the user's query. "
-    "You MUST search for and read the file. Do NOT ask clarifying questions. "
-    "Respond with the file path on the FIRST line, then a brief explanation.\n"
-    "Example response:\n"
-    "src/fastmcp/server/middleware/authorization.py\n"
-    "This file contains the OAuth authorization middleware."
-)
-
 # Blast radius: identify what breaks if a file is edited.
 PROMPT_BLAST = (
     "TASK: The user is about to edit a file. Identify ALL other files that "
@@ -97,16 +86,17 @@ GLYPHH_GUIDANCE = (
     "Use glyphh_related before editing any file to understand blast radius — "
     "it returns semantically similar files that may need coordinated changes. "
     "There is no Grep equivalent for this.\n"
+    "IMPORTANT: Always pass detail='minimal' to glyphh_search and glyphh_related "
+    "to keep responses lightweight (file path + confidence only).\n"
 )
 
 
 def _get_prompt(test_type: str, with_glyphh: bool) -> str:
     """Return the appropriate system prompt for the test type and mode."""
     base = {
-        "navigation": PROMPT_NAV,
         "blast_radius": PROMPT_BLAST,
         "semantic": PROMPT_SEMANTIC,
-    }.get(test_type, PROMPT_NAV)
+    }.get(test_type, PROMPT_SEMANTIC)
 
     if with_glyphh:
         return GLYPHH_GUIDANCE + "\n" + base
@@ -116,10 +106,9 @@ def _get_prompt(test_type: str, with_glyphh: bool) -> str:
 def _get_budget(test_type: str) -> float:
     """Return max budget per test type."""
     return {
-        "navigation": 0.15,
         "blast_radius": 0.30,
         "semantic": 0.25,
-    }.get(test_type, 0.15)
+    }.get(test_type, 0.25)
 
 
 def _compute_stats(results: list[dict]) -> dict:
@@ -265,18 +254,7 @@ def evaluate_result(test_case: dict, result_text: str) -> bool:
     """Evaluate whether the result is correct based on test type."""
     test_type = test_case["type"]
 
-    if test_type == "navigation":
-        expected = test_case.get("expected_file", "")
-        result_files = extract_files_from_result(result_text)
-        first_file = result_files[0] if result_files else ""
-        return (
-            expected == first_file
-            or expected in result_text
-            or first_file.endswith(expected)
-            or expected.endswith(first_file)
-        )
-
-    elif test_type in ("blast_radius", "semantic"):
+    if test_type in ("blast_radius", "semantic"):
         expected_files = test_case.get("expected_files", [])
         min_expected = test_case.get("min_expected", 1)
         found_count = 0
@@ -297,11 +275,7 @@ def run_test(
     query = test_case["query"]
     test_type = test_case["type"]
 
-    # For display
-    if test_type == "navigation":
-        expected_display = test_case.get("expected_file", "")
-    else:
-        expected_display = f"{test_case.get('min_expected', 1)}+ of {len(test_case.get('expected_files', []))} files"
+    expected_display = f"{test_case.get('min_expected', 1)}+ of {len(test_case.get('expected_files', []))} files"
 
     t0 = time.perf_counter()
     raw = run_claude(query, model, with_glyphh, test_type)
@@ -416,7 +390,7 @@ def main():
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--types", nargs="+", default=None,
-        help="Only run specific test types: navigation, blast_radius, semantic",
+        help="Only run specific test types: blast_radius, semantic",
     )
     args = parser.parse_args()
 
