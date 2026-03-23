@@ -310,21 +310,36 @@ def evaluate_result(test_case: dict, response_text: str) -> bool:
     return found_count >= min_expected
 
 
-def run_test(test_case: dict, model: str, with_glyphh: bool) -> dict:
-    """Run a single interactive test case."""
-    turns = build_turns(test_case)
-    budget = 0.50  # Higher budget for interactive sessions
+# Minimum cache_read for a valid session (see run_claude_benchmark.py)
+MIN_CACHE_READ = 30000
+MAX_RETRIES = 2
 
-    result = run_interactive_session(
-        turns=turns,
-        model=model,
-        with_glyphh=with_glyphh,
-        budget=budget,
-    )
+
+def run_test(test_case: dict, model: str, with_glyphh: bool) -> dict:
+    """Run a single interactive test case with retry on startup failures."""
+    turns = build_turns(test_case)
+    budget = 0.50
+
+    for attempt in range(1 + MAX_RETRIES):
+        result = run_interactive_session(
+            turns=turns,
+            model=model,
+            with_glyphh=with_glyphh,
+            budget=budget,
+        )
+
+        cache_read = result.get("cache_read_tokens", 0)
+        if cache_read < MIN_CACHE_READ and attempt < MAX_RETRIES:
+            print(f"    ⚠ startup failure (cache_read={cache_read}, "
+                  f"cost=${result['cost_usd']:.4f}) — retrying "
+                  f"({attempt + 1}/{MAX_RETRIES})...")
+            time.sleep(2)
+            continue
+        break
 
     found = evaluate_result(test_case, result["response_text"])
 
-    return {
+    out = {
         "id": test_case["id"],
         "type": test_case["type"],
         "query": test_case["query"],
@@ -338,6 +353,11 @@ def run_test(test_case: dict, model: str, with_glyphh: bool) -> dict:
         "errors": result["errors"],
         "response_preview": result["response_text"][:500],
     }
+
+    if cache_read < MIN_CACHE_READ:
+        out["errors"] = out.get("errors", []) + [f"startup failure after {MAX_RETRIES} retries"]
+
+    return out
 
 
 def print_summary(label: str, results: list[dict], model: str):

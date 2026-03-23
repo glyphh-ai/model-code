@@ -106,9 +106,9 @@ def _get_prompt(test_type: str, with_glyphh: bool) -> str:
 def _get_budget(test_type: str) -> float:
     """Return max budget per test type."""
     return {
-        "blast_radius": 0.30,
-        "semantic": 0.25,
-    }.get(test_type, 0.25)
+        "blast_radius": 0.50,
+        "semantic": 0.50,
+    }.get(test_type, 0.50)
 
 
 def _compute_stats(results: list[dict]) -> dict:
@@ -266,26 +266,24 @@ def evaluate_result(test_case: dict, result_text: str) -> bool:
     return False
 
 
-def run_test(
-    test_case: dict,
-    model: str,
-    with_glyphh: bool,
-) -> dict:
-    """Run a single test case and return metrics."""
-    query = test_case["query"]
+# Minimum cache_read tokens for a valid session.  A healthy session loads
+# the system prompt + tool definitions into the cache (~40-70K tokens).
+# If cache_read is below this threshold the session failed to bootstrap
+# (transient network issue, MCP stall, etc.) and should be retried.
+MIN_CACHE_READ = 30000
+MAX_RETRIES = 2
+
+
+def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
+    """Parse raw claude -p output into a result dict."""
     test_type = test_case["type"]
-
     expected_display = f"{test_case.get('min_expected', 1)}+ of {len(test_case.get('expected_files', []))} files"
-
-    t0 = time.perf_counter()
-    raw = run_claude(query, model, with_glyphh, test_type)
-    elapsed_ms = (time.perf_counter() - t0) * 1000
 
     if "error" in raw:
         return {
             "id": test_case["id"],
             "type": test_type,
-            "query": query,
+            "query": test_case["query"],
             "expected": expected_display,
             "found": False,
             "result_files": [],
@@ -313,7 +311,7 @@ def run_test(
     return {
         "id": test_case["id"],
         "type": test_type,
-        "query": query,
+        "query": test_case["query"],
         "expected": expected_display,
         "found": found,
         "result_files": result_files[:10],
@@ -327,6 +325,41 @@ def run_test(
         "latency_ms": round(duration, 1),
         "response_preview": result_text[:300] if result_text else "",
     }
+
+
+def run_test(
+    test_case: dict,
+    model: str,
+    with_glyphh: bool,
+) -> dict:
+    """Run a single test case with retry on startup failures.
+
+    A startup failure is detected when cache_read_input_tokens < MIN_CACHE_READ,
+    meaning the session never fully loaded the system prompt, tool definitions,
+    or MCP tools. This burns budget on retries without producing a real answer.
+    """
+    for attempt in range(1 + MAX_RETRIES):
+        t0 = time.perf_counter()
+        raw = run_claude(test_case["query"], model, with_glyphh, test_case["type"])
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        result = _parse_result(test_case, raw, elapsed_ms)
+
+        # Check for startup failure: low cache_read means session didn't bootstrap
+        cache_read = result.get("cache_read_tokens", 0)
+        if cache_read < MIN_CACHE_READ and attempt < MAX_RETRIES:
+            print(f"    ⚠ startup failure (cache_read={cache_read}, "
+                  f"cost=${result['cost_usd']:.4f}) — retrying "
+                  f"({attempt + 1}/{MAX_RETRIES})...")
+            time.sleep(2)  # Brief pause before retry
+            continue
+
+        if cache_read < MIN_CACHE_READ:
+            result["error"] = result.get("error", "") + f" [startup failure after {MAX_RETRIES} retries]"
+
+        return result
+
+    return result  # unreachable but satisfies type checker
 
 
 def print_summary(label: str, results: list[dict], model: str):
