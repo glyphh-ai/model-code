@@ -489,12 +489,11 @@ MCP_TOOLS = [
     {
         "name": "glyphh_search",
         "description": (
-            "Find files in the codebase by natural language query. "
-            "ALWAYS call this before reading any file or listing directories. "
-            "Returns file paths with confidence scores, top concepts, imports, "
-            "and related files. Use top_tokens to understand file content "
-            "without reading it. Use imports to understand dependencies. "
-            "Only read a file if top_tokens and imports do not answer the question."
+            "Semantic codebase search — find files by concept, not string match. "
+            "Use for queries Grep cannot answer: 'what handles webhook validation', "
+            "'files related to the payment retry flow', 'authentication middleware chain'. "
+            "Returns file paths with confidence scores. Use detail='minimal' for "
+            "lightweight responses (file + score only)."
         ),
         "input_schema": {
             "type": "object",
@@ -508,6 +507,16 @@ MCP_TOOLS = [
                     "default": 5,
                     "description": "Number of results to return",
                 },
+                "detail": {
+                    "type": "string",
+                    "enum": ["full", "minimal"],
+                    "default": "full",
+                    "description": (
+                        "Response detail level. 'full' includes top_tokens, "
+                        "imports, and extension for each file. 'minimal' returns "
+                        "only file paths and confidence scores (much smaller response)."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -515,10 +524,10 @@ MCP_TOOLS = [
     {
         "name": "glyphh_related",
         "description": (
-            "Find files semantically related to a given file path. "
-            "ALWAYS call this before editing a file to understand blast radius. "
+            "Find files semantically related to a given file — blast radius analysis. "
+            "Call before editing to find files that may need coordinated changes. "
             "Returns files that share vocabulary, imports, or domain concepts. "
-            "Includes top_tokens and imports for each related file."
+            "No Grep equivalent for this. Use detail='minimal' for lightweight responses."
         ),
         "input_schema": {
             "type": "object",
@@ -531,6 +540,16 @@ MCP_TOOLS = [
                     "type": "integer",
                     "default": 5,
                     "description": "Number of related files to return",
+                },
+                "detail": {
+                    "type": "string",
+                    "enum": ["full", "minimal"],
+                    "default": "full",
+                    "description": (
+                        "Response detail level. 'full' includes top_tokens, "
+                        "imports, and extension for each file. 'minimal' returns "
+                        "only file paths and confidence scores."
+                    ),
                 },
             },
             "required": ["file_path"],
@@ -746,12 +765,16 @@ async def _rerank_with_layers(
 # Result formatting
 # ---------------------------------------------------------------------------
 
-def _format_match(row: dict) -> dict:
+def _format_match(row: dict, detail: str = "full") -> dict:
     """Format a search result into a fact_tree child node.
 
     The runtime stores the full record as glyph metadata. When records
     are sent in hierarchical format, the model's metadata dict is nested
     under the 'metadata' key. Handle both flat and nested layouts.
+
+    Args:
+        detail: "full" includes top_tokens, imports, extension.
+                "minimal" returns only file path and confidence score.
 
     Returns a FactNode-compatible dict: description, value, data_sample.
     """
@@ -759,6 +782,19 @@ def _format_match(row: dict) -> dict:
     inner = meta.get("metadata", {}) if isinstance(meta.get("metadata"), dict) else {}
     file_path = inner.get("file_path") or meta.get("file_path") or row["concept_text"]
     score = round(row["score"], 3)
+
+    if detail == "minimal":
+        return {
+            "description": file_path,
+            "value": score,
+            "children": [],
+            "citations": [],
+            "data_sample": {
+                "file": file_path,
+                "confidence": score,
+            },
+        }
+
     top_tokens = inner.get("top_tokens") or meta.get("top_tokens", [])
     imports = inner.get("imports") or meta.get("imports", [])
     extension = inner.get("extension") or meta.get("extension", "")
@@ -797,6 +833,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
 
     query = arguments.get("query", "")
     top_k = arguments.get("top_k", 5)
+    detail = arguments.get("detail", "full")
     if not query.strip():
         return {"state": "ERROR", "error": "Query is empty."}
 
@@ -842,7 +879,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
                 query_glyph, candidate_ids,
             )
             if ranked:
-                children = [_format_match(r) for r in ranked[:top_k]]
+                children = [_format_match(r, detail) for r in ranked[:top_k]]
                 return {
                     "state": "DONE",
                     "fact_tree": {
@@ -943,7 +980,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
             "error": "Encoding error during re-ranking.",
         }
 
-    children = [_format_match(r) for r in ranked[:top_k]]
+    children = [_format_match(r, detail) for r in ranked[:top_k]]
     top_score = children[0]["value"]
 
     return {
@@ -977,6 +1014,7 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
 
     file_path = arguments.get("file_path", "")
     top_k = arguments.get("top_k", 5)
+    detail = arguments.get("detail", "full")
     if not file_path.strip():
         return {"state": "ERROR", "error": "file_path is required."}
 
@@ -1039,9 +1077,14 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
         exclude_glyph_id=glyph_id,
     )
 
-    children = [_format_match(r) for r in results[:top_k]]
+    children = [_format_match(r, detail) for r in results[:top_k]]
     source_meta = glyph_meta if isinstance(glyph_meta, dict) else {}
     source_inner = source_meta.get("metadata", {}) if isinstance(source_meta.get("metadata"), dict) else {}
+
+    data_context = {"source_file": file_path}
+    if detail != "minimal":
+        data_context["top_tokens"] = source_inner.get("top_tokens") or source_meta.get("top_tokens", [])
+        data_context["imports"] = source_inner.get("imports") or source_meta.get("imports", [])
 
     return {
         "state": "DONE",
@@ -1050,11 +1093,7 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
             "value": None,
             "children": children,
             "citations": [],
-            "data_context": {
-                "source_file": file_path,
-                "top_tokens": source_inner.get("top_tokens") or source_meta.get("top_tokens", []),
-                "imports": source_inner.get("imports") or source_meta.get("imports", []),
-            },
+            "data_context": data_context,
         },
         "confidence": children[0]["value"] if children else 0.0,
         "match_method": "code_related",
