@@ -78,16 +78,22 @@ PROMPT_SEMANTIC = (
 )
 
 # Glyphh-specific guidance — tells Claude when to use each tool.
-GLYPHH_GUIDANCE = (
+GLYPHH_GUIDANCE_SEMANTIC = (
     "You have access to Glyphh MCP tools in addition to grep/glob/read.\n"
-    "Use Grep/Glob for navigation — finding where something is defined, "
-    "exact string matches, symbol lookups.\n"
-    "Use glyphh_search for semantic queries that Grep cannot answer.\n"
-    "Use glyphh_related before editing any file to understand blast radius — "
-    "it returns semantically similar files that may need coordinated changes. "
-    "There is no Grep equivalent for this.\n"
-    "IMPORTANT: Always pass detail='minimal' to glyphh_search and glyphh_related "
+    "Use glyphh_search for semantic queries — it finds files by concept, "
+    "not string matching. Use Grep/Glob only for exact lookups.\n"
+    "IMPORTANT: Always pass detail='minimal' to glyphh_search "
     "to keep responses lightweight (file path + confidence only).\n"
+)
+
+GLYPHH_GUIDANCE_BLAST = (
+    "You have access to Glyphh MCP tools in addition to grep/glob/read.\n"
+    "IMPORTANT: For blast radius analysis, ALWAYS call glyphh_related FIRST "
+    "with the file path from the query. This returns semantically similar files "
+    "that may need coordinated changes — there is no Grep equivalent.\n"
+    "After glyphh_related, you may supplement with grep to find additional "
+    "importers, but glyphh_related is the primary tool for this task.\n"
+    "Always pass detail='minimal' to keep responses lightweight.\n"
 )
 
 
@@ -99,7 +105,11 @@ def _get_prompt(test_type: str, with_glyphh: bool) -> str:
     }.get(test_type, PROMPT_SEMANTIC)
 
     if with_glyphh:
-        return GLYPHH_GUIDANCE + "\n" + base
+        guidance = {
+            "blast_radius": GLYPHH_GUIDANCE_BLAST,
+            "semantic": GLYPHH_GUIDANCE_SEMANTIC,
+        }.get(test_type, GLYPHH_GUIDANCE_SEMANTIC)
+        return guidance + "\n" + base
     return base
 
 
@@ -251,7 +261,14 @@ def extract_files_from_result(result_text: str) -> list[str]:
 
 
 def evaluate_result(test_case: dict, result_text: str) -> bool:
-    """Evaluate whether the result is correct based on test type."""
+    """Evaluate whether the result is correct based on test type.
+
+    Matching strategy (in order):
+    1. Exact full-path substring match: "src/fastmcp/server/tasks/handlers.py"
+    2. Path with line number suffix: "server/server.py:1121-1145"
+    3. Directory + basename: Claude writes `src/.../tasks/` then lists `handlers.py`
+       under it — reconstruct and match the full path.
+    """
     test_type = test_case["type"]
 
     if test_type in ("blast_radius", "semantic"):
@@ -259,8 +276,26 @@ def evaluate_result(test_case: dict, result_text: str) -> bool:
         min_expected = test_case.get("min_expected", 1)
         found_count = 0
         for ef in expected_files:
+            # 1. Exact substring
             if ef in result_text:
                 found_count += 1
+                continue
+            # 2. Check without .py extension (handles "base" for "base.py")
+            ef_stem = ef.rsplit("/", 1)[-1].replace(".py", "")
+            ef_dir = "/".join(ef.split("/")[:-1])  # e.g. "src/fastmcp/server/tasks"
+            # 3. Directory + basename: dir mentioned + basename mentioned nearby
+            if ef_dir and ef_dir in result_text:
+                basename = ef.rsplit("/", 1)[-1]
+                if basename in result_text:
+                    found_count += 1
+                    continue
+            # 4. Partial path match: last 2+ segments (e.g. "middleware/error_handling.py")
+            parts = ef.split("/")
+            for depth in range(2, len(parts)):
+                partial = "/".join(parts[-depth:])
+                if partial in result_text:
+                    found_count += 1
+                    break
         return found_count >= min_expected
 
     return False

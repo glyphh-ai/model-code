@@ -168,27 +168,27 @@
     {
       "id": "semantic_03",
       "type": "semantic",
-      "query": "What files deal with token refresh and expiry?",
+      "query": "How does the server let an LLM call back into the application during a request?",
       "expected_files": [
-        "src/fastmcp/server/auth/oauth_proxy/proxy.py",
-        "src/fastmcp/server/auth/oidc_proxy.py",
-        "src/fastmcp/server/auth/oauth_proxy/models.py"
+        "src/fastmcp/server/sampling/run.py",
+        "src/fastmcp/server/sampling/sampling_tool.py",
+        "src/fastmcp/server/context.py"
       ],
-      "min_expected": 1,
-      "description": "Semantic: token lifecycle (refresh, expiry)"
+      "min_expected": 2,
+      "description": "Semantic: sampling/callback flow — no keyword 'sampling' in query"
     },
     {
       "id": "semantic_04",
       "type": "semantic",
-      "query": "What manages connection pooling and transport lifecycle?",
+      "query": "How does the system decide which tools and resources a specific user can see?",
       "expected_files": [
-        "src/fastmcp/client/transports/streamable_http.py",
-        "src/fastmcp/client/transports/sse.py",
-        "src/fastmcp/client/client.py",
-        "src/fastmcp/server/mixins/transport.py"
+        "src/fastmcp/server/transforms/visibility.py",
+        "src/fastmcp/server/middleware/authorization.py",
+        "src/fastmcp/server/auth/auth.py",
+        "src/fastmcp/server/context.py"
       ],
-      "min_expected": 1,
-      "description": "Semantic: connection management (conceptual)"
+      "min_expected": 2,
+      "description": "Semantic: per-user capability filtering — spans auth, transforms, middleware"
     },
     {
       "id": "semantic_05",
@@ -205,17 +205,15 @@
     {
       "id": "semantic_06",
       "type": "semantic",
-      "query": "What would I need to change to add a new transport type?",
+      "query": "What coordinates server startup, initialization, and graceful shutdown?",
       "expected_files": [
-        "src/fastmcp/client/transports/sse.py",
-        "src/fastmcp/client/transports/streamable_http.py",
-        "src/fastmcp/client/transports/stdio.py",
-        "src/fastmcp/client/transports/base.py",
-        "src/fastmcp/client/transports/__init__.py",
-        "src/fastmcp/client/client.py"
+        "src/fastmcp/server/lifespan.py",
+        "src/fastmcp/server/mixins/lifespan.py",
+        "src/fastmcp/server/app.py",
+        "src/fastmcp/server/server.py"
       ],
-      "min_expected": 1,
-      "description": "Semantic: architectural question — requires understanding transport pattern"
+      "min_expected": 2,
+      "description": "Semantic: lifecycle orchestration — no keyword maps to 'lifespan'"
     },
     {
       "id": "semantic_07",
