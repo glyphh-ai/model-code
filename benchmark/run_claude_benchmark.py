@@ -146,7 +146,6 @@ def _get_budget(test_type: str) -> float:
     """Return max budget per test type."""
     return {
         "blast_radius": 0.30,
-        "semantic": 0.30,
         "drift": 0.15,
         "risk": 0.15,
     }.get(test_type, 0.30)
@@ -162,10 +161,12 @@ def _compute_stats(results: list[dict]) -> dict:
         "completed": n,
         "accuracy": round(found / n * 100, 1),
         "found": found,
-        "avg_tokens": round(sum(r["total_tokens"] for r in results) / n),
+        "avg_cost": round(sum(r["cost_usd"] for r in results) / n, 4),
+        "avg_api_ms": round(sum(r.get("api_ms", r["latency_ms"]) for r in results) / n),
         "avg_turns": round(sum(r["num_turns"] for r in results) / n, 1),
-        "avg_latency_ms": round(sum(r["latency_ms"] for r in results) / n),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),
+        "subagent_spawns": sum(1 for r in results if len(r.get("models_used", [])) > 1),
+        "subagent_cost": round(sum(r.get("subagent_cost", 0) for r in results), 4),
     }
 
 
@@ -200,15 +201,17 @@ def write_status(
     if bare_results and combined_results:
         bs = _compute_stats(bare_results)
         cs = _compute_stats(combined_results)
-        b_tok = max(bs.get("avg_tokens", 1), 1)
+        b_cost = max(bs.get("avg_cost", 0.0001), 0.0001)
+        b_api = max(bs.get("avg_api_ms", 1), 1)
         b_turns = max(bs.get("avg_turns", 1), 0.1)
-        b_cost = max(bs.get("total_cost_usd", 0.0001), 0.0001)
         status["comparison"] = {
-            "token_savings_pct": round((1 - cs.get("avg_tokens", 0) / b_tok) * 100),
+            "cost_savings_pct": round((1 - cs.get("avg_cost", 0) / b_cost) * 100),
+            "api_time_savings_pct": round((1 - cs.get("avg_api_ms", 0) / b_api) * 100),
             "turn_savings_pct": round((1 - cs.get("avg_turns", 0) / b_turns) * 100),
-            "cost_savings_pct": round((1 - cs.get("total_cost_usd", 0) / b_cost) * 100),
             "bare_accuracy": bs.get("accuracy", 0),
             "combined_accuracy": cs.get("accuracy", 0),
+            "bare_subagent_spawns": bs.get("subagent_spawns", 0),
+            "combined_subagent_spawns": cs.get("subagent_spawns", 0),
         }
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -382,6 +385,9 @@ def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
             "total_tokens": 0,
             "cost_usd": 0,
             "latency_ms": round(elapsed_ms, 1),
+            "api_ms": 0,
+            "models_used": [],
+            "subagent_cost": 0,
             "error": raw["error"],
         }
 
@@ -391,6 +397,7 @@ def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
     cost = raw.get("total_cost_usd", 0)
     num_turns = raw.get("num_turns", 0)
     duration = raw.get("duration_ms", elapsed_ms)
+    api_ms = raw.get("duration_api_ms", duration)
 
     usage = raw.get("usage", {})
     input_tokens = usage.get("input_tokens", 0)
@@ -398,6 +405,19 @@ def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
     cache_read = usage.get("cache_read_input_tokens", 0)
     cache_create = usage.get("cache_creation_input_tokens", 0)
     total_tokens = input_tokens + output_tokens + cache_read + cache_create
+
+    # Per-model usage breakdown — detect subagent spawning.
+    model_usage = raw.get("modelUsage", {})
+    models_used = sorted(model_usage.keys())
+    # Subagent cost = total cost of non-primary models (e.g. Haiku Explore agents)
+    primary_model_prefix = "claude-sonnet" if "sonnet" in str(models_used) else ""
+    if not primary_model_prefix and models_used:
+        # Use the most expensive model as primary
+        primary_model_prefix = models_used[0].rsplit("-", 1)[0] if models_used else ""
+    subagent_cost = sum(
+        mu.get("costUSD", 0) for name, mu in model_usage.items()
+        if not name.startswith(primary_model_prefix) and primary_model_prefix
+    )
 
     return {
         "id": test_case["id"],
@@ -414,6 +434,9 @@ def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
         "total_tokens": total_tokens,
         "cost_usd": round(cost, 6),
         "latency_ms": round(duration, 1),
+        "api_ms": round(api_ms, 1),
+        "models_used": models_used,
+        "subagent_cost": round(subagent_cost, 6),
         "response_preview": result_text[:300] if result_text else "",
     }
 
@@ -454,16 +477,19 @@ def run_test(
 
 
 def print_summary(label: str, results: list[dict], model: str):
-    """Print summary table."""
+    """Print summary table with efficiency metrics."""
     total = len(results)
     found = sum(1 for r in results if r["found"])
     accuracy = found / total * 100 if total else 0
 
-    total_tokens = sum(r["total_tokens"] for r in results)
     total_cost = sum(r["cost_usd"] for r in results)
+    total_subagent = sum(r.get("subagent_cost", 0) for r in results)
     avg_turns = sum(r["num_turns"] for r in results) / total if total else 0
-    avg_latency = sum(r["latency_ms"] for r in results) / total if total else 0
-    avg_tokens = total_tokens / total if total else 0
+    avg_api_ms = sum(r.get("api_ms", r["latency_ms"]) for r in results) / total if total else 0
+    avg_cost = total_cost / total if total else 0
+
+    # Count how many tests spawned subagents (used >1 model)
+    subagent_count = sum(1 for r in results if len(r.get("models_used", [])) > 1)
 
     by_type: dict[str, list[dict]] = {}
     for r in results:
@@ -473,23 +499,42 @@ def print_summary(label: str, results: list[dict], model: str):
     print(f"  {label}")
     print(f"  Model: {model}")
     print(f"{'=' * 70}")
-    print(f"  Accuracy:       {found}/{total} ({accuracy:.1f}%)")
-    print(f"  Avg turns:      {avg_turns:.1f}")
-    print(f"  Avg tokens:     {avg_tokens:.0f}")
-    print(f"  Avg latency:    {avg_latency:.0f}ms")
-    print(f"  Total cost:     ${total_cost:.4f}")
+    print(f"  Accuracy:        {found}/{total} ({accuracy:.1f}%)")
+    print(f"  Avg cost:        ${avg_cost:.4f}/query")
+    print(f"  Avg API time:    {avg_api_ms/1000:.1f}s")
+    print(f"  Avg turns:       {avg_turns:.1f}")
+    print(f"  Total cost:      ${total_cost:.4f}")
+    if subagent_count > 0:
+        print(f"  Subagent spawns: {subagent_count}/{total} tests ({subagent_count/total*100:.0f}%)")
+        print(f"  Subagent cost:   ${total_subagent:.4f} ({total_subagent/max(total_cost,0.0001)*100:.0f}% of total)")
     print()
 
+    # Per-type breakdown
+    print(f"  {'Type':15s} {'Acc':>7s} {'Avg $':>8s} {'Avg API':>8s} {'Turns':>6s} {'Sub$':>7s}")
+    print(f"  {'-'*15} {'-'*7} {'-'*8} {'-'*8} {'-'*6} {'-'*7}")
     for test_type, type_results in sorted(by_type.items()):
         n = len(type_results)
         f = sum(1 for r in type_results if r["found"])
         tc = sum(r["num_turns"] for r in type_results) / n
-        tk = sum(r["total_tokens"] for r in type_results) / n
-        cost = sum(r["cost_usd"] for r in type_results)
-        print(f"  {test_type:15s}  {f}/{n} correct  avg {tc:.1f} turns  "
-              f"avg {tk:.0f} tok  ${cost:.4f}")
+        cost = sum(r["cost_usd"] for r in type_results) / n
+        api = sum(r.get("api_ms", r["latency_ms"]) for r in type_results) / n
+        sub = sum(r.get("subagent_cost", 0) for r in type_results)
+        print(f"  {test_type:15s} {f:>3d}/{n:<3d} ${cost:>6.4f} {api/1000:>6.1f}s {tc:>5.1f} ${sub:>5.4f}")
 
     print()
+
+    # Per-test detail for blast_radius (the head-to-head type)
+    blast_results = by_type.get("blast_radius", [])
+    if blast_results:
+        print(f"  Per-test detail (blast_radius):")
+        print(f"  {'ID':12s} {'Pass':>4s} {'Cost':>8s} {'API':>6s} {'Turns':>5s} {'Models':s}")
+        print(f"  {'-'*12} {'-'*4} {'-'*8} {'-'*6} {'-'*5} {'-'*20}")
+        for r in blast_results:
+            mark = "✓" if r["found"] else "✗"
+            models = "/".join(m.split("-")[1] for m in r.get("models_used", []))
+            api_s = r.get("api_ms", r["latency_ms"]) / 1000
+            print(f"  {r['id']:12s} {mark:>4s} ${r['cost_usd']:>6.4f} {api_s:>5.1f}s {r['num_turns']:>5d} {models}")
+        print()
 
     failures = [r for r in results if not r["found"]]
     if failures:
@@ -559,9 +604,10 @@ def main():
             bare_results.append(r)
             mark = "✓" if r["found"] else "✗"
             err = f" [{r['error'][:30]}]" if r.get("error") else ""
+            models = "/".join(m.split("-")[1] for m in r.get("models_used", []))
             print(f"  [{i+1}/{len(bare_cases)}] {mark} {tc['id']:12s} "
-                  f"({r['num_turns']} turns, {r['total_tokens']} tok, "
-                  f"${r['cost_usd']:.4f}, {r['latency_ms']:.0f}ms){err}")
+                  f"({r['num_turns']} turns, ${r['cost_usd']:.4f}, "
+                  f"api {r['api_ms']/1000:.0f}s, {models or '?'}){err}")
             write_status(args.model, len(test_cases), bare_results, combined_results, phase="bare")
 
         out_path = RESULTS_DIR / f"cc_bare_{args.model}_{ts}.json"
@@ -579,9 +625,10 @@ def main():
             combined_results.append(r)
             mark = "✓" if r["found"] else "✗"
             err = f" [{r['error'][:30]}]" if r.get("error") else ""
+            models = "/".join(m.split("-")[1] for m in r.get("models_used", []))
             print(f"  [{i+1}/{len(test_cases)}] {mark} {tc['id']:12s} "
-                  f"({r['num_turns']} turns, {r['total_tokens']} tok, "
-                  f"${r['cost_usd']:.4f}, {r['latency_ms']:.0f}ms){err}")
+                  f"({r['num_turns']} turns, ${r['cost_usd']:.4f}, "
+                  f"api {r['api_ms']/1000:.0f}s, {models or '?'}){err}")
             write_status(args.model, len(test_cases), bare_results, combined_results, phase="combined")
 
         out_path = RESULTS_DIR / f"cc_combined_{args.model}_{ts}.json"
@@ -592,64 +639,65 @@ def main():
 
     # --- Comparison ---
     if args.mode == "both" and bare_results and combined_results:
-        # Head-to-head: only compare test types that both modes ran.
         comparable_combined = [r for r in combined_results if r["type"] not in GLYPHH_ONLY_TYPES]
         glyphh_only_results = [r for r in combined_results if r["type"] in GLYPHH_ONLY_TYPES]
 
         print("=" * 70)
-        print("  HEAD-TO-HEAD: GLYPHH + LLM vs BARE LLM")
+        print("  HEAD-TO-HEAD: BLAST RADIUS")
         print("=" * 70)
 
-        # Overall (comparable tests only)
         n = len(bare_results)
-        c_found = sum(1 for r in comparable_combined if r["found"])
-        b_found = sum(1 for r in bare_results if r["found"])
+
+        # Efficiency metrics (the real story)
         c_cost = sum(r["cost_usd"] for r in comparable_combined)
         b_cost = sum(r["cost_usd"] for r in bare_results)
-        c_tokens = sum(r["total_tokens"] for r in comparable_combined)
-        b_tokens = sum(r["total_tokens"] for r in bare_results)
+        c_api = sum(r.get("api_ms", r["latency_ms"]) for r in comparable_combined)
+        b_api = sum(r.get("api_ms", r["latency_ms"]) for r in bare_results)
         c_turns = sum(r["num_turns"] for r in comparable_combined)
         b_turns = sum(r["num_turns"] for r in bare_results)
-        c_latency = sum(r["latency_ms"] for r in comparable_combined)
-        b_latency = sum(r["latency_ms"] for r in bare_results)
+        c_found = sum(1 for r in comparable_combined if r["found"])
+        b_found = sum(1 for r in bare_results if r["found"])
+        c_subs = sum(1 for r in comparable_combined if len(r.get("models_used", [])) > 1)
+        b_subs = sum(1 for r in bare_results if len(r.get("models_used", [])) > 1)
+        c_subcost = sum(r.get("subagent_cost", 0) for r in comparable_combined)
+        b_subcost = sum(r.get("subagent_cost", 0) for r in bare_results)
 
-        print(f"\n  {'COMPARABLE':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s} {'Delta':>10s}")
+        print(f"\n  {'Metric':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s} {'Savings':>10s}")
         print(f"  {'-'*20} {'-'*12} {'-'*12} {'-'*10}")
         print(f"  {'Accuracy':20s} {c_found:>7d}/{n:<4d} {b_found:>7d}/{n:<4d}")
-        print(f"  {'Avg tokens':20s} {c_tokens/n:>12.0f} {b_tokens/n:>12.0f} {(1-c_tokens/max(b_tokens,1))*100:>+9.0f}%")
+        print(f"  {'Avg cost/query':20s} ${c_cost/n:>10.4f} ${b_cost/n:>10.4f} {(1-c_cost/max(b_cost,0.0001))*100:>+9.0f}%")
+        print(f"  {'Avg API time':20s} {c_api/n/1000:>10.1f}s {b_api/n/1000:>10.1f}s {(1-c_api/max(b_api,1))*100:>+9.0f}%")
         print(f"  {'Avg turns':20s} {c_turns/n:>12.1f} {b_turns/n:>12.1f} {(1-c_turns/max(b_turns,1))*100:>+9.0f}%")
-        print(f"  {'Avg latency':20s} {c_latency/n:>10.0f}ms {b_latency/n:>10.0f}ms {(1-c_latency/max(b_latency,1))*100:>+9.0f}%")
-        print(f"  {'Total cost':20s} ${c_cost:>11.4f} ${b_cost:>11.4f} {(1-c_cost/max(b_cost,0.0001))*100:>+9.0f}%")
+        print(f"  {'Subagent spawns':20s} {c_subs:>8d}/{n}   {b_subs:>8d}/{n}")
+        if b_subcost > 0 or c_subcost > 0:
+            print(f"  {'Subagent cost':20s} ${c_subcost:>10.4f} ${b_subcost:>10.4f}")
+        print(f"  {'Total cost':20s} ${c_cost:>10.4f} ${b_cost:>10.4f} {(1-c_cost/max(b_cost,0.0001))*100:>+9.0f}%")
 
-        # Per type (comparable)
-        types_in_results = sorted(set(r["type"] for r in comparable_combined))
-        for test_type in types_in_results:
-            cr = [r for r in comparable_combined if r["type"] == test_type]
-            br = [r for r in bare_results if r["type"] == test_type]
-            tn = len(cr)
-            cf = sum(1 for r in cr if r["found"])
-            bf = sum(1 for r in br if r["found"])
-            cc = sum(r["cost_usd"] for r in cr)
-            bc = sum(r["cost_usd"] for r in br)
-            ct = sum(r["total_tokens"] for r in cr)
-            bt = sum(r["total_tokens"] for r in br)
+        # Per-test side-by-side
+        print(f"\n  Per-test comparison:")
+        print(f"  {'ID':12s} {'G.Pass':>6s} {'B.Pass':>6s} {'G.Cost':>8s} {'B.Cost':>8s} {'G.API':>6s} {'B.API':>6s} {'G.Mdl':>8s} {'B.Mdl':>8s}")
+        print(f"  {'-'*12} {'-'*6} {'-'*6} {'-'*8} {'-'*8} {'-'*6} {'-'*6} {'-'*8} {'-'*8}")
+        for cr, br in zip(comparable_combined, bare_results):
+            gm = "✓" if cr["found"] else "✗"
+            bm = "✓" if br["found"] else "✗"
+            g_models = "/".join(m.split("-")[1] for m in cr.get("models_used", []))
+            b_models = "/".join(m.split("-")[1] for m in br.get("models_used", []))
+            g_api = cr.get("api_ms", cr["latency_ms"]) / 1000
+            b_api = br.get("api_ms", br["latency_ms"]) / 1000
+            print(f"  {cr['id']:12s} {gm:>6s} {bm:>6s} ${cr['cost_usd']:>6.4f} ${br['cost_usd']:>6.4f} "
+                  f"{g_api:>5.0f}s {b_api:>5.0f}s {g_models:>8s} {b_models:>8s}")
 
-            print(f"\n  {test_type.upper():20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s} {'Delta':>10s}")
-            print(f"  {'-'*20} {'-'*12} {'-'*12} {'-'*10}")
-            print(f"  {'Accuracy':20s} {cf:>7d}/{tn:<4d} {bf:>7d}/{tn:<4d}")
-            print(f"  {'Avg tokens':20s} {ct/tn:>12.0f} {bt/tn:>12.0f} {(1-ct/max(bt,1))*100:>+9.0f}%")
-            print(f"  {'Cost':20s} ${cc:>11.4f} ${bc:>11.4f} {(1-cc/max(bc,0.0001))*100:>+9.0f}%")
-
-        # Glyphh-only section
+        # Glyphh-only capabilities
         if glyphh_only_results:
-            print(f"\n  {'GLYPHH-ONLY':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s}")
-            print(f"  {'-'*20} {'-'*12} {'-'*12}")
+            print(f"\n  {'GLYPHH-ONLY CAPABILITIES':s}")
+            print(f"  {'-'*50}")
             for test_type in sorted(set(r["type"] for r in glyphh_only_results)):
                 gr = [r for r in glyphh_only_results if r["type"] == test_type]
                 gn = len(gr)
                 gf = sum(1 for r in gr if r["found"])
-                gc = sum(r["cost_usd"] for r in gr)
-                print(f"  {test_type.upper():20s} {gf:>7d}/{gn:<4d} {'N/A':>12s}  ${gc:.4f}")
+                gc = sum(r["cost_usd"] for r in gr) / gn
+                ga = sum(r.get("api_ms", r["latency_ms"]) for r in gr) / gn / 1000
+                print(f"  {test_type.upper():12s}  {gf}/{gn} correct  avg ${gc:.4f}  avg {ga:.1f}s  (no grep equivalent)")
 
         print()
 
