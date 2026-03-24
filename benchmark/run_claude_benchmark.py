@@ -4,13 +4,17 @@
 Runs real Claude Code sessions against a target repo. Measures the actual
 tool calls, tokens, and cost Claude Code uses to complete each task.
 
-Two test types:
+Test types:
   blast_radius  — "what breaks if I edit X?" (Glyphh's strength)
   semantic      — conceptual queries with no exact string match
+  drift         — semantic drift score for a specific file (Glyphh-only)
+  risk          — risk profile for changed files (Glyphh-only)
 
 Two modes:
   combined — Claude Code with Glyphh MCP server + grep/glob/read
   bare     — Claude Code without Glyphh (grep/glob/read only)
+
+Note: drift and risk tests are Glyphh-only — they are skipped in bare mode.
 
 Usage:
     python benchmark/run_claude_benchmark.py                  # both modes
@@ -18,7 +22,7 @@ Usage:
     python benchmark/run_claude_benchmark.py --mode bare      # without Glyphh
     python benchmark/run_claude_benchmark.py --limit 5        # subset
     python benchmark/run_claude_benchmark.py --model sonnet   # use Sonnet
-    python benchmark/run_claude_benchmark.py --types blast_radius semantic
+    python benchmark/run_claude_benchmark.py --types blast_radius semantic drift risk
 """
 
 from __future__ import annotations
@@ -96,21 +100,65 @@ GLYPHH_GUIDANCE_BLAST = (
     "Always pass detail='minimal' to keep responses lightweight.\n"
 )
 
+# Drift: score semantic drift for a file (Glyphh-only).
+PROMPT_DRIFT = (
+    "TASK: Use the glyphh_drift tool to compute the semantic drift score "
+    "for the specified file. Report the drift_score (0.0 to 1.0) and "
+    "drift_label (cosmetic, moderate, significant, or architectural).\n"
+    "Format your response as:\n"
+    "  drift_score: <number>\n"
+    "  drift_label: <label>\n"
+    "Do NOT ask clarifying questions — just call the tool and report."
+)
+
+GLYPHH_GUIDANCE_DRIFT = (
+    "You have access to Glyphh MCP tools.\n"
+    "IMPORTANT: Call glyphh_drift with the file_path from the query. "
+    "This computes how much the file has changed semantically since the "
+    "last index build. There is no grep/glob equivalent for this.\n"
+)
+
+# Risk: aggregate risk profile for changed files (Glyphh-only).
+PROMPT_RISK = (
+    "TASK: Use the glyphh_risk tool to compute the risk profile for the "
+    "current working tree (or the specified git ref). Report:\n"
+    "  risk_label: <cosmetic|moderate|significant|architectural>\n"
+    "  max_drift: <number>\n"
+    "  mean_drift: <number>\n"
+    "  hot_files: <list of files above moderate threshold, or 'none'>\n"
+    "Do NOT ask clarifying questions — just call the tool and report."
+)
+
+GLYPHH_GUIDANCE_RISK = (
+    "You have access to Glyphh MCP tools.\n"
+    "IMPORTANT: Call glyphh_risk to get the aggregate risk profile. "
+    "This scores all changed files by semantic drift and identifies hot files. "
+    "There is no grep/glob equivalent for this.\n"
+)
+
 
 def _get_prompt(test_type: str, with_glyphh: bool) -> str:
     """Return the appropriate system prompt for the test type and mode."""
     base = {
         "blast_radius": PROMPT_BLAST,
         "semantic": PROMPT_SEMANTIC,
+        "drift": PROMPT_DRIFT,
+        "risk": PROMPT_RISK,
     }.get(test_type, PROMPT_SEMANTIC)
 
     if with_glyphh:
         guidance = {
             "blast_radius": GLYPHH_GUIDANCE_BLAST,
             "semantic": GLYPHH_GUIDANCE_SEMANTIC,
+            "drift": GLYPHH_GUIDANCE_DRIFT,
+            "risk": GLYPHH_GUIDANCE_RISK,
         }.get(test_type, GLYPHH_GUIDANCE_SEMANTIC)
         return guidance + "\n" + base
     return base
+
+
+# Test types that require Glyphh — skipped in bare mode.
+GLYPHH_ONLY_TYPES = {"drift", "risk"}
 
 
 def _get_budget(test_type: str) -> float:
@@ -118,6 +166,8 @@ def _get_budget(test_type: str) -> float:
     return {
         "blast_radius": 0.30,
         "semantic": 0.30,
+        "drift": 0.15,
+        "risk": 0.15,
     }.get(test_type, 0.30)
 
 
@@ -263,11 +313,14 @@ def extract_files_from_result(result_text: str) -> list[str]:
 def evaluate_result(test_case: dict, result_text: str) -> bool:
     """Evaluate whether the result is correct based on test type.
 
-    Matching strategy (in order):
+    Matching strategy for blast_radius/semantic (in order):
     1. Exact full-path substring match: "src/fastmcp/server/tasks/handlers.py"
     2. Path with line number suffix: "server/server.py:1121-1145"
     3. Directory + basename: Claude writes `src/.../tasks/` then lists `handlers.py`
        under it — reconstruct and match the full path.
+
+    Drift: checks that drift_score and drift_label appear in output.
+    Risk: checks that risk_label and either max_drift or mean_drift appear.
     """
     test_type = test_case["type"]
 
@@ -298,6 +351,23 @@ def evaluate_result(test_case: dict, result_text: str) -> bool:
                     break
         return found_count >= min_expected
 
+    if test_type == "drift":
+        # Success = Claude called glyphh_drift and reported both score and label.
+        text_lower = result_text.lower()
+        has_score = "drift_score" in text_lower or "drift score" in text_lower
+        has_label = any(label in text_lower for label in
+                        ("cosmetic", "moderate", "significant", "architectural"))
+        return has_score and has_label
+
+    if test_type == "risk":
+        # Success = Claude called glyphh_risk and reported risk profile.
+        text_lower = result_text.lower()
+        has_risk_label = "risk_label" in text_lower or "risk label" in text_lower or \
+            any(label in text_lower for label in
+                ("cosmetic", "moderate", "significant", "architectural"))
+        has_drift = "drift" in text_lower
+        return has_risk_label and has_drift
+
     return False
 
 
@@ -312,7 +382,12 @@ MAX_RETRIES = 2
 def _parse_result(test_case: dict, raw: dict, elapsed_ms: float) -> dict:
     """Parse raw claude -p output into a result dict."""
     test_type = test_case["type"]
-    expected_display = f"{test_case.get('min_expected', 1)}+ of {len(test_case.get('expected_files', []))} files"
+    if test_type == "drift":
+        expected_display = f"drift score for {test_case.get('file_path', '?')}"
+    elif test_type == "risk":
+        expected_display = f"risk profile{' for ' + test_case['git_ref'] if test_case.get('git_ref') else ''}"
+    else:
+        expected_display = f"{test_case.get('min_expected', 1)}+ of {len(test_case.get('expected_files', []))} files"
 
     if "error" in raw:
         return {
@@ -458,7 +533,7 @@ def main():
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--types", nargs="+", default=None,
-        help="Only run specific test types: blast_radius, semantic",
+        help="Only run specific test types: blast_radius, semantic, drift, risk",
     )
     args = parser.parse_args()
 
@@ -490,15 +565,20 @@ def main():
     combined_results = None
 
     # --- Bare LLM ---
+    # Filter out Glyphh-only test types for bare mode.
+    bare_cases = [tc for tc in test_cases if tc["type"] not in GLYPHH_ONLY_TYPES]
     if args.mode in ("both", "bare"):
         print("Running bare LLM mode (no Glyphh)...")
+        if len(bare_cases) < len(test_cases):
+            skipped = len(test_cases) - len(bare_cases)
+            print(f"  (skipping {skipped} Glyphh-only tests: drift, risk)")
         bare_results = []
-        for i, tc in enumerate(test_cases):
+        for i, tc in enumerate(bare_cases):
             r = run_test(tc, args.model, with_glyphh=False)
             bare_results.append(r)
             mark = "✓" if r["found"] else "✗"
             err = f" [{r['error'][:30]}]" if r.get("error") else ""
-            print(f"  [{i+1}/{len(test_cases)}] {mark} {tc['id']:12s} "
+            print(f"  [{i+1}/{len(bare_cases)}] {mark} {tc['id']:12s} "
                   f"({r['num_turns']} turns, {r['total_tokens']} tok, "
                   f"${r['cost_usd']:.4f}, {r['latency_ms']:.0f}ms){err}")
             write_status(args.model, len(test_cases), bare_results, combined_results, phase="bare")
@@ -531,24 +611,28 @@ def main():
 
     # --- Comparison ---
     if args.mode == "both" and bare_results and combined_results:
+        # Head-to-head: only compare test types that both modes ran.
+        comparable_combined = [r for r in combined_results if r["type"] not in GLYPHH_ONLY_TYPES]
+        glyphh_only_results = [r for r in combined_results if r["type"] in GLYPHH_ONLY_TYPES]
+
         print("=" * 70)
         print("  HEAD-TO-HEAD: GLYPHH + LLM vs BARE LLM")
         print("=" * 70)
 
-        # Overall
-        n = len(test_cases)
-        c_found = sum(1 for r in combined_results if r["found"])
+        # Overall (comparable tests only)
+        n = len(bare_results)
+        c_found = sum(1 for r in comparable_combined if r["found"])
         b_found = sum(1 for r in bare_results if r["found"])
-        c_cost = sum(r["cost_usd"] for r in combined_results)
+        c_cost = sum(r["cost_usd"] for r in comparable_combined)
         b_cost = sum(r["cost_usd"] for r in bare_results)
-        c_tokens = sum(r["total_tokens"] for r in combined_results)
+        c_tokens = sum(r["total_tokens"] for r in comparable_combined)
         b_tokens = sum(r["total_tokens"] for r in bare_results)
-        c_turns = sum(r["num_turns"] for r in combined_results)
+        c_turns = sum(r["num_turns"] for r in comparable_combined)
         b_turns = sum(r["num_turns"] for r in bare_results)
-        c_latency = sum(r["latency_ms"] for r in combined_results)
+        c_latency = sum(r["latency_ms"] for r in comparable_combined)
         b_latency = sum(r["latency_ms"] for r in bare_results)
 
-        print(f"\n  {'OVERALL':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s} {'Delta':>10s}")
+        print(f"\n  {'COMPARABLE':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s} {'Delta':>10s}")
         print(f"  {'-'*20} {'-'*12} {'-'*12} {'-'*10}")
         print(f"  {'Accuracy':20s} {c_found:>7d}/{n:<4d} {b_found:>7d}/{n:<4d}")
         print(f"  {'Avg tokens':20s} {c_tokens/n:>12.0f} {b_tokens/n:>12.0f} {(1-c_tokens/max(b_tokens,1))*100:>+9.0f}%")
@@ -556,10 +640,10 @@ def main():
         print(f"  {'Avg latency':20s} {c_latency/n:>10.0f}ms {b_latency/n:>10.0f}ms {(1-c_latency/max(b_latency,1))*100:>+9.0f}%")
         print(f"  {'Total cost':20s} ${c_cost:>11.4f} ${b_cost:>11.4f} {(1-c_cost/max(b_cost,0.0001))*100:>+9.0f}%")
 
-        # Per type
-        types_in_results = sorted(set(r["type"] for r in combined_results))
+        # Per type (comparable)
+        types_in_results = sorted(set(r["type"] for r in comparable_combined))
         for test_type in types_in_results:
-            cr = [r for r in combined_results if r["type"] == test_type]
+            cr = [r for r in comparable_combined if r["type"] == test_type]
             br = [r for r in bare_results if r["type"] == test_type]
             tn = len(cr)
             cf = sum(1 for r in cr if r["found"])
@@ -574,6 +658,17 @@ def main():
             print(f"  {'Accuracy':20s} {cf:>7d}/{tn:<4d} {bf:>7d}/{tn:<4d}")
             print(f"  {'Avg tokens':20s} {ct/tn:>12.0f} {bt/tn:>12.0f} {(1-ct/max(bt,1))*100:>+9.0f}%")
             print(f"  {'Cost':20s} ${cc:>11.4f} ${bc:>11.4f} {(1-cc/max(bc,0.0001))*100:>+9.0f}%")
+
+        # Glyphh-only section
+        if glyphh_only_results:
+            print(f"\n  {'GLYPHH-ONLY':20s} {'Glyphh+LLM':>12s} {'Bare LLM':>12s}")
+            print(f"  {'-'*20} {'-'*12} {'-'*12}")
+            for test_type in sorted(set(r["type"] for r in glyphh_only_results)):
+                gr = [r for r in glyphh_only_results if r["type"] == test_type]
+                gn = len(gr)
+                gf = sum(1 for r in gr if r["found"])
+                gc = sum(r["cost_usd"] for r in gr)
+                print(f"  {test_type.upper():20s} {gf:>7d}/{gn:<4d} {'N/A':>12s}  ${gc:.4f}")
 
         print()
 

@@ -156,68 +156,6 @@
     {
       "id": "semantic_02",
       "type": "semantic",
-      "query": "How does the authentication middleware chain work?",
-      "expected_files": [
-        "src/fastmcp/server/middleware/authorization.py",
-        "src/fastmcp/server/auth/auth.py",
-        "src/fastmcp/server/middleware/middleware.py"
-      ],
-      "min_expected": 1,
-      "description": "Semantic: auth middleware chain (conceptual)"
-    },
-    {
-      "id": "semantic_03",
-      "type": "semantic",
-      "query": "How does the server let an LLM call back into the application during a request?",
-      "expected_files": [
-        "src/fastmcp/server/sampling/run.py",
-        "src/fastmcp/server/sampling/sampling_tool.py",
-        "src/fastmcp/server/context.py"
-      ],
-      "min_expected": 2,
-      "description": "Semantic: sampling/callback flow — no keyword 'sampling' in query"
-    },
-    {
-      "id": "semantic_04",
-      "type": "semantic",
-      "query": "How does the system decide which tools and resources a specific user can see?",
-      "expected_files": [
-        "src/fastmcp/server/transforms/visibility.py",
-        "src/fastmcp/server/middleware/authorization.py",
-        "src/fastmcp/server/auth/auth.py",
-        "src/fastmcp/server/context.py"
-      ],
-      "min_expected": 2,
-      "description": "Semantic: per-user capability filtering — spans auth, transforms, middleware"
-    },
-    {
-      "id": "semantic_05",
-      "type": "semantic",
-      "query": "Where is request routing and dispatch handled?",
-      "expected_files": [
-        "src/fastmcp/server/server.py",
-        "src/fastmcp/server/http.py",
-        "src/fastmcp/server/middleware/middleware.py"
-      ],
-      "min_expected": 1,
-      "description": "Semantic: request routing (conceptual)"
-    },
-    {
-      "id": "semantic_06",
-      "type": "semantic",
-      "query": "What coordinates server startup, initialization, and graceful shutdown?",
-      "expected_files": [
-        "src/fastmcp/server/lifespan.py",
-        "src/fastmcp/server/mixins/lifespan.py",
-        "src/fastmcp/server/app.py",
-        "src/fastmcp/server/server.py"
-      ],
-      "min_expected": 2,
-      "description": "Semantic: lifecycle orchestration — no keyword maps to 'lifespan'"
-    },
-    {
-      "id": "semantic_07",
-      "type": "semantic",
       "query": "How does error propagation work from tools through middleware to the client?",
       "expected_files": [
         "src/fastmcp/exceptions.py",
@@ -229,7 +167,7 @@
       "description": "Semantic: cross-cutting error flow — spans tools, middleware, exceptions"
     },
     {
-      "id": "semantic_08",
+      "id": "semantic_03",
       "type": "semantic",
       "query": "What files are involved in the visibility and access control system?",
       "expected_files": [
@@ -242,7 +180,7 @@
       "description": "Semantic: visibility/access control — cross-cutting concern spanning transforms and auth"
     },
     {
-      "id": "semantic_09",
+      "id": "semantic_04",
       "type": "semantic",
       "query": "How does the provider system aggregate tools from multiple sources?",
       "expected_files": [
@@ -255,7 +193,7 @@
       "description": "Semantic: provider aggregation — architectural question about multi-source tools"
     },
     {
-      "id": "semantic_10",
+      "id": "semantic_05",
       "type": "semantic",
       "query": "What handles background task execution and worker scheduling?",
       "expected_files": [
@@ -266,6 +204,41 @@
       ],
       "min_expected": 2,
       "description": "Semantic: task system — no exact string match for 'scheduling'"
+    },
+
+    {
+      "id": "drift_01",
+      "type": "drift",
+      "query": "Score drift for src/fastmcp/server/server.py",
+      "file_path": "src/fastmcp/server/server.py",
+      "description": "Drift: core server — high-traffic file, any change matters"
+    },
+    {
+      "id": "drift_02",
+      "type": "drift",
+      "query": "Score drift for src/fastmcp/server/context.py",
+      "file_path": "src/fastmcp/server/context.py",
+      "description": "Drift: request context — passed through entire pipeline"
+    },
+    {
+      "id": "drift_03",
+      "type": "drift",
+      "query": "Score drift for src/fastmcp/exceptions.py",
+      "file_path": "src/fastmcp/exceptions.py",
+      "description": "Drift: exception hierarchy — 51 importers"
+    },
+    {
+      "id": "risk_01",
+      "type": "risk",
+      "query": "What is the risk profile of the current working tree?",
+      "description": "Risk: aggregate drift for all uncommitted changes"
+    },
+    {
+      "id": "risk_02",
+      "type": "risk",
+      "query": "Score risk for the last commit",
+      "git_ref": "HEAD~1",
+      "description": "Risk: aggregate drift for the previous commit"
     }
   ]
 }
