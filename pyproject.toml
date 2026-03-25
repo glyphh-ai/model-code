@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glyphh-code"
-version = "0.6.9"
+version = "0.6.10"
 description = "Codebase intelligence for Claude Code — HDC-powered file search"
 readme = "README.md"
 license = {text = "AGPL-3.0"}

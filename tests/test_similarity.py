@@ -5,7 +5,8 @@ from glyphh import Encoder
 from glyphh.core.types import Concept
 from glyphh.core.ops import cosine_similarity
 
-from glyphh_code.encoder import ENCODER_CONFIG, encode_query
+from glyphh_code.encoder import ENCODER_CONFIG, encode_query, _extract_identifiers, _extract_imports, _tokenize
+from glyphh_code.ast_extract import extract_sections
 
 # Layer weights matching the encoder config
 _LAYER_WEIGHTS = {"path": 0.25, "symbols": 0.25, "content": 0.50}
@@ -396,7 +397,7 @@ class TestSectionScoring:
     def test_real_file_section_routing(self, encoder):
         """Test on real encoder.py — 'MCP tool handler' should find handle_mcp_tool."""
         from pathlib import Path as P
-        content = (P(__file__).parent.parent / "encoder.py").read_text()
+        content = (P(__file__).parent.parent / "glyphh_code" / "encoder.py").read_text()
         scored = self._score_sections(encoder, "MCP tool handler dispatch", content)
         top_3_names = [name for name, _ in scored[:3]]
         assert "handle_mcp_tool" in top_3_names, (
@@ -406,7 +407,7 @@ class TestSectionScoring:
     def test_token_savings_on_real_file(self, encoder):
         """Verify glyphh_context achieves meaningful line reduction on a real file."""
         from pathlib import Path as P
-        content = (P(__file__).parent.parent / "encoder.py").read_text()
+        content = (P(__file__).parent.parent / "glyphh_code" / "encoder.py").read_text()
         sections = extract_sections(content, ".py")
         total_lines = len(content.splitlines())
 

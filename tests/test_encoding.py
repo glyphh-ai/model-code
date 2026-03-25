@@ -338,7 +338,7 @@ class TestExtractSections:
     def test_real_file(self):
         """Test on the actual encoder.py file."""
         from pathlib import Path as P
-        content = (P(__file__).parent.parent / "encoder.py").read_text()
+        content = (P(__file__).parent.parent / "glyphh_code" / "encoder.py").read_text()
         sections = extract_sections(content, ".py")
         names = [s["name"] for s in sections]
         assert "encode_query" in names
@@ -351,7 +351,7 @@ class TestExtractSections:
     def test_sections_dont_overlap(self):
         """Section line ranges should not overlap (except preamble edge)."""
         from pathlib import Path as P
-        content = (P(__file__).parent.parent / "encoder.py").read_text()
+        content = (P(__file__).parent.parent / "glyphh_code" / "encoder.py").read_text()
         sections = extract_sections(content, ".py")
         # Sort by start line
         sorted_sections = sorted(sections, key=lambda s: s["start_line"])
