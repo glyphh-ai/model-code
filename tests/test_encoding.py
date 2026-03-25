@@ -18,7 +18,7 @@ from glyphh_code.encoder import (
     INDEXABLE_EXTENSIONS,
     SKIP_DIRS,
 )
-from ast_extract import extract_sections
+from glyphh_code.ast_extract import extract_sections
 
 
 class TestEncoderConfig:

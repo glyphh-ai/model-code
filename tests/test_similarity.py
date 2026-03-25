@@ -273,7 +273,7 @@ class TestMCPToolSchemas:
         assert related["input_schema"]["required"] == ["file_path"]
 
     def test_context_tool_schema(self):
-        from encoder import MCP_TOOLS
+        from glyphh_code.encoder import MCP_TOOLS
         context = next(t for t in MCP_TOOLS if t["name"] == "glyphh_context")
         assert "description" in context
         assert set(context["input_schema"]["required"]) == {"file_path", "query"}
