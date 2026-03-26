@@ -1035,7 +1035,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
         if merged:
             ranked = sorted(merged.values(), key=lambda c: c["value"], reverse=True)
             children = ranked[:top_k]
-            return {
+            result = {
                 "state": "DONE",
                 "fact_tree": {
                     "description": "Similarity Computation",
@@ -1047,6 +1047,9 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
                 "confidence": children[0]["value"],
                 "match_method": "code_search_decomposed",
             }
+            if detail == "minimal":
+                result["_detail"] = "minimal"
+            return result
         # Decomposition found nothing — fall through to direct search
 
     org_id = context["org_id"]
@@ -1092,7 +1095,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
             )
             if ranked:
                 children = [_format_match(r, detail) for r in ranked[:top_k]]
-                return {
+                result = {
                     "state": "DONE",
                     "fact_tree": {
                         "description": "Similarity Computation",
@@ -1104,6 +1107,9 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
                     "confidence": children[0]["value"],
                     "match_method": "code_search_path",
                 }
+                if detail == "minimal":
+                    result["_detail"] = "minimal"
+                return result
 
     # Phase 2: full search — merge candidates from all layers.
     # Cap each layer so none dominates the candidate pool.
