@@ -569,12 +569,12 @@ MCP_TOOLS = [
                 },
                 "detail": {
                     "type": "string",
-                    "enum": ["full", "minimal"],
-                    "default": "full",
+                    "enum": ["minimal", "full"],
+                    "default": "minimal",
                     "description": (
-                        "Response detail level. 'full' includes top_tokens, "
-                        "imports, and extension for each file. 'minimal' returns "
-                        "only file paths and confidence scores (much smaller response)."
+                        "Response detail level. 'minimal' (default) returns "
+                        "only file paths and confidence scores. 'full' includes "
+                        "top_tokens, imports, and extension for each file."
                     ),
                 },
             },
@@ -587,7 +587,7 @@ MCP_TOOLS = [
             "Find files semantically related to a given file — blast radius analysis. "
             "Call before editing to find files that may need coordinated changes. "
             "Returns files that share vocabulary, imports, or domain concepts. "
-            "No Grep equivalent for this. Use detail='minimal' for lightweight responses."
+            "No Grep equivalent for this."
         ),
         "input_schema": {
             "type": "object",
@@ -603,10 +603,12 @@ MCP_TOOLS = [
                 },
                 "detail": {
                     "type": "string",
-                    "enum": ["full", "minimal"],
-                    "default": "full",
+                    "enum": ["minimal", "full"],
+                    "default": "minimal",
                     "description": (
-                        "Response detail level. 'full' includes top_tokens, "
+                        "Response detail level. 'minimal' (default) returns "
+                        "only file paths and confidence scores. 'full' includes "
+                        "top_tokens, imports, and extension for each file."
                         "imports, and extension for each file. 'minimal' returns "
                         "only file paths and confidence scores."
                     ),
@@ -1006,7 +1008,7 @@ async def _handle_search(arguments: dict, context: dict) -> dict:
 
     query = arguments.get("query", "")
     top_k = arguments.get("top_k", 5)
-    detail = arguments.get("detail", "full")
+    detail = arguments.get("detail", "minimal")
     if not query.strip():
         return {"state": "ERROR", "error": "Query is empty."}
 
@@ -1224,7 +1226,7 @@ async def _handle_related(arguments: dict, context: dict) -> dict:
 
     file_path = arguments.get("file_path", "")
     top_k = arguments.get("top_k", 5)
-    detail = arguments.get("detail", "full")
+    detail = arguments.get("detail", "minimal")
     if not file_path.strip():
         return {"state": "ERROR", "error": "file_path is required."}
 

@@ -104,7 +104,12 @@ def _compile_repo(repo_path: str, runtime_url: str) -> tuple[int, list[str]]:
                 if current_phase:
                     click.echo("\r" + " " * 72 + "\r", nl=False)
                 current_phase = phase
-                label = "Extracting" if phase == "extract" else "Uploading"
+                phase_labels = {
+                    "extract": "Extracting",
+                    "relationships": "Building graph",
+                    "upload": "Encoding & uploading",
+                }
+                label = phase_labels.get(phase, phase.capitalize())
                 click.secho(f"         {label}...", fg=theme.TEXT_DIM)
             bar = _render_bar(cur, tot)
             click.echo(f"\r         {bar}", nl=False)
@@ -440,11 +445,11 @@ def _cmd_init(args: str):
     click.echo()
 
     # Step 1: Deploy model (new weights / encoder on upgrade)
-    click.secho("  [1/5] Deploying model...", fg=theme.MUTED)
+    click.secho("  [1/4] Deploying model...", fg=theme.MUTED)
     _deploy_model(runtime_url)
 
     # Step 2: Clear existing index (stale data from old weights)
-    click.secho("  [2/5] Clearing index...", fg=theme.MUTED)
+    click.secho("  [2/4] Clearing index...", fg=theme.MUTED)
     try:
         import httpx
         with httpx.Client(timeout=30) as client:
@@ -456,21 +461,13 @@ def _cmd_init(args: str):
     except Exception:
         pass  # Fresh install — nothing to clear
 
-    # Step 3: Full compile
-    click.secho("  [3/5] Compiling codebase...", fg=theme.MUTED)
+    # Step 3: Compile + encode (compile.py extracts, builds graph, encodes, uploads)
+    click.secho("  [3/4] Compiling codebase...", fg=theme.MUTED)
     file_count, job_ids = _compile_repo(repo, runtime_url)
     click.secho(f"         {file_count} files indexed", fg=theme.TEXT_DIM)
 
-    # Step 4: Wait for encoding to complete
-    if job_ids:
-        click.secho("  [4/5] Encoding...", fg=theme.MUTED)
-        _wait_for_jobs(job_ids, runtime_url)
-        click.secho("         encoding complete", fg=theme.TEXT_DIM)
-    else:
-        click.secho("  [4/5] Encoding... skipped (no jobs)", fg=theme.MUTED)
-
-    # Step 5: Configure Claude Code (update paths + instructions on upgrade)
-    click.secho("  [5/5] Configuring Claude Code...", fg=theme.MUTED)
+    # Step 4: Configure Claude Code (update paths + instructions on upgrade)
+    click.secho("  [4/4] Configuring Claude Code...", fg=theme.MUTED)
     dev_info = json.loads((_GLYPHH_DIR / "dev.json").read_text())
     mcp_url = dev_info.get("mcp_url") or f"{runtime_url}/local-dev-org/code/mcp"
     _configure_claude_code(repo, mcp_url, is_upgrade=is_upgrade)
@@ -506,9 +503,6 @@ def _cmd_compile(args: str):
     repo = str(Path(args.strip() or ".").resolve())
     click.secho(f"  Compiling: {repo}", fg=theme.TEXT)
     count, job_ids = _compile_repo(repo, runtime_url)
-    if job_ids:
-        click.secho(f"  Waiting for {len(job_ids)} encoding job(s)...", fg=theme.MUTED)
-        _wait_for_jobs(job_ids, runtime_url)
     click.secho(f"  Done: {count} files indexed", fg=theme.SUCCESS)
 
 
