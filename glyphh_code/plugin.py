@@ -172,8 +172,15 @@ def _deploy_model(runtime_url: str) -> bool:
 
 
 def _configure_claude_code(repo_path: str, mcp_url: str, is_upgrade: bool = False):
-    """Configure Claude Code: MCP server, CLAUDE.md, hooks."""
+    """Configure Claude Code: MCP server, hooks, permissions.
+
+    Does NOT touch the user's CLAUDE.md. Glyphh tool usage is enforced
+    via a PreToolUse search gate hook that blocks Grep/Glob/Bash(grep|find)
+    until glyphh_search has been called at least once per session.
+    """
     repo = Path(repo_path).resolve()
+    claude_dir = repo / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Add MCP server to Claude Code
     try:
@@ -189,40 +196,24 @@ def _configure_claude_code(repo_path: str, mcp_url: str, is_upgrade: bool = Fals
             click.secho(f"  ✗ MCP failed: {result.stderr.strip()[:80]}", fg=theme.WARNING)
             click.secho(f"    Run: claude mcp add --transport http glyphh {mcp_url}", fg=theme.TEXT_DIM)
     except FileNotFoundError:
-        click.secho("  ✗ Claude Code CLI not found", fg=theme.WARNING)
+        click.secho("  ✗ Claude Code CLI not found (npm install -g @anthropic-ai/claude-code)", fg=theme.WARNING)
         click.secho(f"    Run: claude mcp add --transport http glyphh {mcp_url}", fg=theme.TEXT_DIM)
 
-    # 2. Add/update Glyphh instructions in CLAUDE.md
+    # 2. Migrate: remove Glyphh section from CLAUDE.md if previously injected
     target_claude_md = repo / "CLAUDE.md"
-    source_claude_md = _PACKAGE_DIR / "CLAUDE.md"
     _GLYPHH_MARKER = "# Glyphh Code Intelligence"
-    if source_claude_md.exists():
-        glyphh_section = source_claude_md.read_text()
-        if not target_claude_md.exists():
-            target_claude_md.write_text(glyphh_section)
-            click.secho("  ✓ CLAUDE.md created with Glyphh instructions", fg=theme.SUCCESS)
-        else:
-            existing = target_claude_md.read_text()
-            if _GLYPHH_MARKER not in existing:
-                # First time — append to existing CLAUDE.md
-                with open(target_claude_md, "a") as f:
-                    f.write(f"\n\n{glyphh_section}")
-                click.secho("  ✓ Glyphh instructions appended to CLAUDE.md", fg=theme.SUCCESS)
-            elif is_upgrade:
-                # Upgrade — replace the Glyphh section with latest version
-                marker_pos = existing.index(_GLYPHH_MARKER)
-                prefix = existing[:marker_pos].rstrip()
-                if prefix:
-                    target_claude_md.write_text(f"{prefix}\n\n{glyphh_section}")
-                else:
-                    target_claude_md.write_text(glyphh_section)
-                click.secho("  ✓ Glyphh instructions updated in CLAUDE.md", fg=theme.SUCCESS)
+    if target_claude_md.exists():
+        existing = target_claude_md.read_text()
+        if _GLYPHH_MARKER in existing:
+            marker_pos = existing.index(_GLYPHH_MARKER)
+            cleaned = existing[:marker_pos].rstrip()
+            if cleaned:
+                target_claude_md.write_text(cleaned + "\n")
             else:
-                click.secho("  ○ CLAUDE.md already has Glyphh instructions", fg=theme.TEXT_DIM)
+                target_claude_md.unlink()
+            click.secho("  ✓ Migrated Glyphh instructions out of CLAUDE.md", fg=theme.SUCCESS)
 
     # 3. Add hooks + permissions to .claude/settings.json
-    claude_dir = repo / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
     settings_file = claude_dir / "settings.json"
 
     settings = {}
@@ -241,18 +232,51 @@ def _configure_claude_code(repo_path: str, mcp_url: str, is_upgrade: bool = Fals
     # Hooks — on upgrade, refresh paths (package dir may have moved)
     hooks = settings.setdefault("hooks", {})
 
-    # Remove legacy enforce-glyphh-search hook (Grep/Glob are allowed now)
-    if "PreToolUse" in hooks:
-        hooks["PreToolUse"] = [
-            h for h in hooks["PreToolUse"]
-            if "enforce-glyphh-search" not in h.get("hooks", [{}])[0].get("command", "")
-        ]
-        if not hooks["PreToolUse"]:
-            del hooks["PreToolUse"]
+    # ── SessionStart: reset the search-gate flag ──────────────────────────
+    session_hooks = hooks.setdefault("SessionStart", [])
+    glyphh_dir = repo / ".glyphh"
+    reset_cmd = f"rm -f {glyphh_dir}/.search_used"
+    # Remove stale glyphh session hooks, then add current
+    session_hooks[:] = [
+        h for h in session_hooks
+        if ".search_used" not in h.get("hooks", [{}])[0].get("command", "")
+    ]
+    session_hooks.append({
+        "hooks": [{"type": "command", "command": reset_cmd}],
+    })
 
+    # ── PreToolUse: gate Grep/Glob/Bash(grep|find) until glyphh_search called ─
+    pre_hooks = hooks.setdefault("PreToolUse", [])
+    gate_script = _PACKAGE_DIR / "hooks" / "search-gate.sh"
+    gate_cmd = f"bash {gate_script} {glyphh_dir}"
+    # Remove stale glyphh gate hooks, then add current
+    pre_hooks[:] = [
+        h for h in pre_hooks
+        if "search-gate" not in h.get("hooks", [{}])[0].get("command", "")
+        and ".search_used" not in h.get("hooks", [{}])[0].get("command", "")
+        and "enforce-glyphh-search" not in h.get("hooks", [{}])[0].get("command", "")
+    ]
+    pre_hooks.append({
+        "matcher": "Grep|Glob|Bash",
+        "hooks": [{"type": "command", "command": gate_cmd}],
+    })
+
+    # ── PostToolUse: set search-gate flag after glyphh_search ────────────
+    post_hooks = hooks.setdefault("PostToolUse", [])
+    flag_cmd = f"mkdir -p {glyphh_dir} && touch {glyphh_dir}/.search_used"
+    # Remove stale glyphh flag hooks
+    post_hooks[:] = [
+        h for h in post_hooks
+        if ".search_used" not in h.get("hooks", [{}])[0].get("command", "")
+    ]
+    post_hooks.append({
+        "matcher": "mcp__glyphh__glyphh_search",
+        "hooks": [{"type": "command", "command": flag_cmd}],
+    })
+
+    # ── PostToolUse: incremental compile after git commits ───────────────
     compile_script = _PACKAGE_DIR / "hooks" / "post-git-compile.sh"
     if compile_script.exists():
-        post_hooks = hooks.setdefault("PostToolUse", [])
         if is_upgrade:
             # Replace existing compile hook with updated path
             post_hooks[:] = [

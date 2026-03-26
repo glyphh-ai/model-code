@@ -38,6 +38,13 @@ Built on [**Glyphh Ada 1.1**](https://www.glyphh.ai/products/runtime) · **[Docs
 >
 > See [benchmark/BENCHMARK.md](benchmark/BENCHMARK.md) for full results.
 
+## Prerequisites
+
+- **Python ≥ 3.10**
+- **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code`
+  (required for `code init` to register the MCP server and configure hooks)
+
+
 ## Quick Start
 
 One install, one command. No Docker, no PostgreSQL, no auth required.
@@ -60,7 +67,7 @@ That's it. `code init` handles everything:
 1. **Starts a local dev server** (SQLite, no Docker needed)
 2. **Deploys the Code model** to the running runtime
 3. **Compiles your codebase** into an HDC vector index
-4. **Configures Claude Code** — adds MCP server, CLAUDE.md, hooks, permissions
+4. **Configures Claude Code** — adds MCP server, search gate hooks, permissions
 
 Restart Claude Code to activate. In VS Code: `Cmd+Shift+P` → "Claude Code:
 Restart". In the CLI: exit and re-enter the session.
@@ -259,11 +266,12 @@ Running `code init .` in the Glyphh shell sets up the following in your
 project:
 
 - **MCP server** — `claude mcp add --transport http glyphh <url>`
-- **CLAUDE.md** — instructs Claude to use `glyphh_search` before reading files
 - **`.claude/settings.json`** — hooks and permissions:
   - `mcp__glyphh__*` permission (no MCP prompts)
+  - PreToolUse hook: gates Grep/Glob/Bash until `glyphh_search` has been called
   - PostToolUse hook: runs incremental compile after `git commit`
 - **`.gitignore`** — adds `.glyphh/` entry
+- **CLAUDE.md migration** — removes previously injected Glyphh sections (if any)
 
 
 ## Environment variables
