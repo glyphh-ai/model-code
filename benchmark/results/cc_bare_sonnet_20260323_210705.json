@@ -1,0 +1,270 @@
+{
+  "model": "sonnet",
+  "mode": "bare",
+  "results": [
+    {
+      "id": "blast_01",
+      "type": "blast_radius",
+      "query": "I'm about to edit src/fastmcp/server/auth/oauth_proxy/proxy.py \u2014 what other files might break?",
+      "expected": "2+ of 4 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/auth/oauth_proxy/__init__.py",
+        "src/fastmcp/server/auth/oauth_proxy/consent.py",
+        "src/fastmcp/server/auth/oauth_proxy/models.py",
+        "src/fastmcp/server/auth/__init__.py",
+        "src/fastmcp/server/auth/oidc_proxy.py",
+        "src/fastmcp/server/auth/auth.py",
+        "src/fastmcp/server/auth/providers/workos.py",
+        "src/fastmcp/server/auth/providers/google.py",
+        "src/fastmcp/server/auth/providers/github.py",
+        "src/fastmcp/server/auth/providers/discord.py"
+      ],
+      "num_turns": 5,
+      "input_tokens": 7,
+      "output_tokens": 1077,
+      "cache_read_tokens": 44590,
+      "cache_create_tokens": 14465,
+      "total_tokens": 60139,
+      "cost_usd": 0.139661,
+      "latency_ms": 16802,
+      "api_ms": 16727,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct dependents (import `oauth_proxy.proxy` or closely coupled):**\n\n`src/fastmcp/server/auth/oauth_proxy/__init__.py`\n\u2014 likely re-exports from `proxy.py`; any public API changes break downstream importers\n\n`src/fastmcp/server/auth/oauth_proxy/consent.py`\n\u2014 sibling module that directly imports fr"
+    },
+    {
+      "id": "blast_02",
+      "type": "blast_radius",
+      "query": "I'm editing src/fastmcp/server/middleware/middleware.py \u2014 what else could be affected?",
+      "expected": "3+ of 6 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/middleware/__init__.py",
+        "src/fastmcp/server/server.py",
+        "src/fastmcp/server/low_level.py",
+        "src/fastmcp/server/middleware/authorization.py",
+        "src/fastmcp/server/middleware/caching.py",
+        "src/fastmcp/server/middleware/rate_limiting.py",
+        "src/fastmcp/server/middleware/timing.py",
+        "src/fastmcp/server/middleware/tool_injection.py",
+        "src/fastmcp/server/middleware/dereference.py",
+        "src/fastmcp/server/middleware/error_handling.py"
+      ],
+      "num_turns": 4,
+      "input_tokens": 9,
+      "output_tokens": 807,
+      "cache_read_tokens": 47356,
+      "cache_create_tokens": 11115,
+      "total_tokens": 59287,
+      "cost_usd": 0.113367,
+      "latency_ms": 14713,
+      "api_ms": 14448,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct importers (will break if interfaces change):**\n\n`src/fastmcp/server/middleware/__init__.py` \u2014 re-exports from middleware.py; any removed/renamed symbols break the public API\n\n`src/fastmcp/server/server.py` \u2014 imports and wires middleware into the server pipeline\n\n`src/fastmcp/server/low_leve"
+    },
+    {
+      "id": "blast_03",
+      "type": "blast_radius",
+      "query": "I need to refactor src/fastmcp/tools/base.py \u2014 what else will need changes?",
+      "expected": "2+ of 3 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/tools/__init__.py",
+        "src/fastmcp/tools/function_tool.py",
+        "src/fastmcp/tools/tool_transform.py",
+        "src/fastmcp/tools/function_parsing.py",
+        "src/fastmcp/server/sampling/sampling_tool.py",
+        "src/fastmcp/server/providers/local_provider/decorators/tools.py",
+        "src/fastmcp/utilities/components.py",
+        "src/fastmcp/prompts/base.py",
+        "src/fastmcp/resources/base.py",
+        "src/fastmcp/resources/template.py"
+      ],
+      "num_turns": 6,
+      "input_tokens": 7,
+      "output_tokens": 1059,
+      "cache_read_tokens": 53955,
+      "cache_create_tokens": 7040,
+      "total_tokens": 62061,
+      "cost_usd": 0.097487,
+      "latency_ms": 20273,
+      "api_ms": 20251,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct dependents of `src/fastmcp/tools/base.py`:**\n\n```\nsrc/fastmcp/tools/__init__.py\n```\nImports `Tool` and `ToolResult` directly from `.base` \u2014 any renamed/removed symbols break the public API.\n\n```\nsrc/fastmcp/tools/function_tool.py\n```\nDirect importer (`from .base import ...`) and semanticall"
+    },
+    {
+      "id": "blast_04",
+      "type": "blast_radius",
+      "query": "I'm changing the dependency injection in src/fastmcp/server/dependencies.py \u2014 what files could break?",
+      "expected": "3+ of 5 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/context.py",
+        "src/fastmcp/server/server.py",
+        "src/fastmcp/server/middleware/authorization.py",
+        "src/fastmcp/server/tasks/handlers.py",
+        "src/fastmcp/server/tasks/elicitation.py",
+        "src/fastmcp/server/tasks/config.py",
+        "src/fastmcp/server/mixins/lifespan.py",
+        "src/fastmcp/server/telemetry.py",
+        "src/fastmcp/server/providers/proxy.py",
+        "src/fastmcp/tools/function_tool.py"
+      ],
+      "num_turns": 4,
+      "input_tokens": 9,
+      "output_tokens": 1071,
+      "cache_read_tokens": 52877,
+      "cache_create_tokens": 5481,
+      "total_tokens": 59438,
+      "cost_usd": 0.087515,
+      "latency_ms": 20450,
+      "api_ms": 20193,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct importers** (from grep \u2014 these will break if you change signatures/exports):\n\n```\nsrc/fastmcp/server/context.py\nsrc/fastmcp/server/server.py\nsrc/fastmcp/server/middleware/authorization.py\nsrc/fastmcp/server/tasks/handlers.py\nsrc/fastmcp/server/tasks/elicitation.py\nsrc/fastmcp/server/tasks/c"
+    },
+    {
+      "id": "blast_05",
+      "type": "blast_radius",
+      "query": "What's affected if I refactor src/fastmcp/server/context.py?",
+      "expected": "3+ of 5 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/dependencies.py",
+        "src/fastmcp/server/server.py",
+        "src/fastmcp/server/low_level.py",
+        "src/fastmcp/server/http.py",
+        "src/fastmcp/server/mixins/transport.py",
+        "src/fastmcp/server/middleware/middleware.py",
+        "src/fastmcp/server/middleware/tool_injection.py",
+        "src/fastmcp/server/middleware/authorization.py",
+        "src/fastmcp/server/sampling/run.py",
+        "src/fastmcp/server/sampling/sampling_tool.py"
+      ],
+      "num_turns": 4,
+      "input_tokens": 9,
+      "output_tokens": 1542,
+      "cache_read_tokens": 53043,
+      "cache_create_tokens": 5947,
+      "total_tokens": 60541,
+      "cost_usd": 0.102285,
+      "latency_ms": 25944,
+      "api_ms": 25685,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct production-code importers** (from grep):\n\n```\nsrc/fastmcp/server/dependencies.py\n```\nLikely provides `Context` as a FastAPI dependency \u2014 any signature/constructor changes break injection.\n\n```\nsrc/fastmcp/server/server.py\n```\nCore server wires up and passes context to tool/resource/prompt h"
+    },
+    {
+      "id": "blast_06",
+      "type": "blast_radius",
+      "query": "I need to modify src/fastmcp/server/providers/base.py \u2014 what else will need changes?",
+      "expected": "2+ of 4 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/providers/wrapped_provider.py",
+        "src/fastmcp/server/providers/aggregate.py",
+        "src/fastmcp/server/providers/fastmcp_provider.py",
+        "src/fastmcp/server/providers/local_provider/local_provider.py",
+        "src/fastmcp/server/providers/proxy.py",
+        "src/fastmcp/server/providers/openapi/provider.py",
+        "src/fastmcp/server/providers/skills/skill_provider.py",
+        "src/fastmcp/server/providers/__init__.py",
+        "src/fastmcp/server/app.py",
+        "src/fastmcp/server/mixins/transport.py"
+      ],
+      "num_turns": 5,
+      "input_tokens": 9,
+      "output_tokens": 1113,
+      "cache_read_tokens": 52889,
+      "cache_create_tokens": 5385,
+      "total_tokens": 59396,
+      "cost_usd": 0.087971,
+      "latency_ms": 19357,
+      "api_ms": 19103,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "**Direct dependents (import `base.py`):**\n\n- `src/fastmcp/server/providers/wrapped_provider.py` \u2014 subclasses or uses the base provider directly\n- `src/fastmcp/server/providers/aggregate.py` \u2014 composes multiple providers, depends on base interface\n- `src/fastmcp/server/providers/fastmcp_provider.py` "
+    },
+    {
+      "id": "blast_07",
+      "type": "blast_radius",
+      "query": "What breaks if I change src/fastmcp/exceptions.py?",
+      "expected": "2+ of 4 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/server.py",
+        "src/fastmcp/server/dependencies.py",
+        "src/fastmcp/server/providers/proxy.py",
+        "src/fastmcp/server/providers/aggregate.py",
+        "src/fastmcp/server/mixins/mcp_operations.py",
+        "src/fastmcp/server/middleware/error_handling.py",
+        "src/fastmcp/server/middleware/authorization.py",
+        "src/fastmcp/server/auth/authorization.py",
+        "src/fastmcp/server/sampling/run.py",
+        "src/fastmcp/server/sampling/sampling_tool.py"
+      ],
+      "num_turns": 4,
+      "input_tokens": 9,
+      "output_tokens": 1015,
+      "cache_read_tokens": 53263,
+      "cache_create_tokens": 5837,
+      "total_tokens": 60124,
+      "cost_usd": 0.088533,
+      "latency_ms": 21124,
+      "api_ms": 20864,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "The glyphh semantic results don't overlap much with direct importers, so the real blast radius is the grep output. Here are the **source files** that directly import from `exceptions.py` and would break with any rename/removal:\n\n```\nsrc/fastmcp/server/server.py\nsrc/fastmcp/server/dependencies.py\nsrc"
+    },
+    {
+      "id": "blast_08",
+      "type": "blast_radius",
+      "query": "I'm editing src/fastmcp/server/auth/auth.py \u2014 what other files are affected?",
+      "expected": "3+ of 8 files",
+      "found": true,
+      "result_files": [
+        "src/fastmcp/server/auth/__init__.py",
+        "src/fastmcp/client/__init__.py",
+        "src/fastmcp/server/auth/providers/in_memory.py",
+        "src/fastmcp/server/auth/providers/github.py",
+        "src/fastmcp/server/auth/providers/google.py",
+        "src/fastmcp/server/auth/providers/discord.py",
+        "src/fastmcp/server/auth/providers/aws.py",
+        "src/fastmcp/server/auth/providers/debug.py",
+        "src/fastmcp/server/auth/oauth_proxy/proxy.py",
+        "src/fastmcp/utilities/token_cache.py"
+      ],
+      "num_turns": 7,
+      "input_tokens": 8,
+      "output_tokens": 1331,
+      "cache_read_tokens": 76246,
+      "cache_create_tokens": 7442,
+      "total_tokens": 85027,
+      "cost_usd": 0.11795,
+      "latency_ms": 22222,
+      "api_ms": 22183,
+      "models_used": [
+        "claude-sonnet-4-6"
+      ],
+      "subagent_cost": 0,
+      "response_preview": "Here are the files directly affected, grouped by relationship:\n\n**Direct importers of `auth.py` symbols** \u2014 most likely to break:\n\n- `src/fastmcp/server/auth/__init__.py` \u2014 re-exports from `auth.py`; any renamed/removed class breaks the public API\n- `src/fastmcp/client/__init__.py` \u2014 imports auth sy"
+    }
+  ]
+}
